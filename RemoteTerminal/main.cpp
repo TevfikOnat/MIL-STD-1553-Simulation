@@ -1,9 +1,12 @@
 #include <winsock2.h>
 #include <iostream>
+#include <array>
+#include "CommandWord.h"
 
 #pragma comment(lib, "ws2_32.lib")
 
 using namespace std;
+
 
 int main() {
     WSADATA wsaData;
@@ -27,39 +30,52 @@ int main() {
     address.sin_port = htons(port);
     address.sin_addr.s_addr = INADDR_ANY;
 
-
-    uint16_t CommandWord;
-
-    uint8_t rtAddress;
-    uint8_t transmit;
-    uint8_t subAddress;
-    uint8_t wordCount;
-
     bind(
         sock,
         reinterpret_cast<sockaddr*>(&address),
         sizeof(address)
     );
 
-
     sockaddr_in sender{};
     int senderSize = sizeof(sender);
 
+    uint16_t CommandWord;
+    uint16_t DataWord;
+
     int bytesReceived = recvfrom(sock, reinterpret_cast<char*>(&CommandWord), sizeof(CommandWord), 0,
         reinterpret_cast<sockaddr*>(&sender),
-        &senderSize);
+        &senderSize);    
+
+    array<uint16_t, 32> memory;
+    uint8_t memAddress = 0;
+
     
+    DecodedCommand command = DecodeCMD(CommandWord);
 
-    rtAddress = (CommandWord >> 11) & (0x1F);
-    transmit = (CommandWord >> 10) & (0x01);
-    subAddress = (CommandWord >> 5) & (0x1F);
-    wordCount = CommandWord & (0x1F);
+    int rtAddress = command.rtAddress;
+    int transmit = command.transmit;
+    int subAddress = command.subAddress;
+    int wordCount = command.wordCount;
 
+    if (static_cast<int>(command.rtAddress) == 5) {
 
-    cout << "RT Address: " << (int)rtAddress << endl;
-    cout << "Transmit/Receive: " << (int)transmit << endl;
-    cout << "Sub Address: " << (int)subAddress << endl;
-    cout << "Word Count: " << (int)wordCount << endl;
+        cout << "RT Address: " << rtAddress << endl;
+        cout << "Transmit/Receive: " << transmit << endl;
+        cout << "Sub Address: " << subAddress << endl;
+        cout << "Word Count: " << wordCount << endl;
+
+        if (transmit == 0) {
+            int DataReceived = recvfrom(sock, reinterpret_cast<char*>(&DataWord), sizeof(DataWord), 0,
+                reinterpret_cast<sockaddr*>(&sender),
+                &senderSize);
+            memory[subAddress] = static_cast<int>(DataWord);
+            cout << "Data " << memory[subAddress] << " Written on the address: " << subAddress;
+        }
+
+        if (transmit == 1) {
+
+        }
+    }
 
     WSACleanup();
     return 0;

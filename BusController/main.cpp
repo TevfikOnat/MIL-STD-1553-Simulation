@@ -1,18 +1,12 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <iostream>
+#include "CommandWord.h"
 
 #pragma comment(lib, "ws2_32.lib")
 
 using namespace std;
 
-struct CommandWord
-{
-    uint8_t rtAddress;
-    uint8_t transmit;
-    uint8_t subAddress;
-    uint8_t wordCount;
-};
 
 int main() {
     WSADATA wsaData;
@@ -27,7 +21,7 @@ int main() {
 
     if (sock == INVALID_SOCKET)
     {
-        cout << "Socket oluşturulamadı.\n";
+        cout << "Invalid Socket" << endl;
         return 1;
     }
 
@@ -37,16 +31,7 @@ int main() {
     InetPton(AF_INET, "127.0.0.1", &destination.sin_addr);
 
     
-    uint8_t rtAddress = 2;
-    uint8_t transmit = 0;
-    uint8_t subAddress = 12;
-    uint8_t wordCount = 5;
-
-    uint16_t cmd = 0;
-    cmd |= (rtAddress << 11);
-    cmd |= (transmit << 10);
-    cmd |= (subAddress << 5);
-    cmd |= wordCount;
+    uint16_t cmd = CreateCommandWord(5, 0, 9, 7);
 
     int bytesSent = sendto(sock, reinterpret_cast<char*>(&cmd), sizeof(cmd), 0,
         reinterpret_cast<sockaddr*>(&destination),
@@ -58,8 +43,17 @@ int main() {
     }
     else
     {
-        cout << "Sent " << bytesSent << " bytes." << endl;
+        cout << "Sent " << bytesSent << " bytes to the addres " << static_cast<int>(DecodeCMD(cmd).rtAddress);
     }
+
+    if (static_cast<int>(DecodeCMD(cmd).transmit) == 0) {
+        uint16_t data = 352;
+        int DataSent = sendto(sock, reinterpret_cast<char*>(&data), sizeof(data), 0,
+            reinterpret_cast<sockaddr*>(&destination),
+            sizeof(destination));
+
+    }
+    
 
     closesocket(sock);
     WSACleanup();
