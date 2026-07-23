@@ -5,14 +5,6 @@
 
 using namespace std;
 
-struct CommandWord
-{
-    uint8_t rtAddress;
-    uint8_t transmit;
-    uint8_t subAddress;
-    uint8_t wordCount;
-};
-
 int main() {
     WSADATA wsaData;
     int port = 8888;
@@ -26,7 +18,7 @@ int main() {
 
     if (sock == INVALID_SOCKET)
     {
-        cout << "Socket oluşturulamadı.\n";
+        cout << "Invalid Socket" << endl;
         return 1;
     }
 
@@ -35,8 +27,13 @@ int main() {
     address.sin_port = htons(port);
     address.sin_addr.s_addr = INADDR_ANY;
 
-    CommandWord cmd;
 
+    uint16_t CommandWord;
+
+    uint8_t rtAddress;
+    uint8_t transmit;
+    uint8_t subAddress;
+    uint8_t wordCount;
 
     bind(
         sock,
@@ -44,23 +41,25 @@ int main() {
         sizeof(address)
     );
 
-    //char buffer[1024];
 
     sockaddr_in sender{};
     int senderSize = sizeof(sender);
 
-    int bytesReceived = recvfrom(sock, reinterpret_cast<char*>(&cmd), sizeof(cmd), 0,
+    int bytesReceived = recvfrom(sock, reinterpret_cast<char*>(&CommandWord), sizeof(CommandWord), 0,
         reinterpret_cast<sockaddr*>(&sender),
         &senderSize);
     
-    //buffer[bytesReceived] = '\0';
 
-    cout << "Received " << bytesReceived << " bytes\n";
+    rtAddress = (CommandWord >> 11) & (0x1F);
+    transmit = (CommandWord >> 10) & (0x01);
+    subAddress = (CommandWord >> 5) & (0x1F);
+    wordCount = CommandWord & (0x1F);
 
-    cout << "RT Address : " << (int)cmd.rtAddress << endl;
-    cout << "Transmit   : " << (int)cmd.transmit << endl;
-    cout << "SubAddress : " << (int)cmd.subAddress << endl;
-    cout << "WordCount  : " << (int)cmd.wordCount << endl;
+
+    cout << "RT Address: " << (int)rtAddress << endl;
+    cout << "Transmit/Receive: " << (int)transmit << endl;
+    cout << "Sub Address: " << (int)subAddress << endl;
+    cout << "Word Count: " << (int)wordCount << endl;
 
     WSACleanup();
     return 0;

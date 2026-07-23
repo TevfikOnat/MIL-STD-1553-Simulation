@@ -36,22 +36,21 @@ int main() {
     destination.sin_port = htons(port);
     InetPton(AF_INET, "127.0.0.1", &destination.sin_addr);
 
-    CommandWord cmd;
+    
+    uint8_t rtAddress = 2;
+    uint8_t transmit = 0;
+    uint8_t subAddress = 12;
+    uint8_t wordCount = 5;
 
-    cmd.rtAddress = 9;
-    cmd.transmit = 1;
-    cmd.subAddress = 3;
-    cmd.wordCount = 1;
-
-    const char* message = "Live Long Glorious Gilgamesh";
-
-    char buffer[1024];
+    uint16_t cmd = 0;
+    cmd |= (rtAddress << 11);
+    cmd |= (transmit << 10);
+    cmd |= (subAddress << 5);
+    cmd |= wordCount;
 
     int bytesSent = sendto(sock, reinterpret_cast<char*>(&cmd), sizeof(cmd), 0,
         reinterpret_cast<sockaddr*>(&destination),
         sizeof(destination));
-
-    buffer[bytesSent] = '\0';
 
     if (bytesSent == SOCKET_ERROR)
     {
