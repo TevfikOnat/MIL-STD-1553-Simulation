@@ -2,6 +2,7 @@
 #include <iostream>
 #include <array>
 #include "CommandWord.h"
+#include "StatusWord.h"
 
 #pragma comment(lib, "ws2_32.lib")
 
@@ -49,6 +50,10 @@ int main() {
 
     memory[8] = 123;
 
+    uint16_t statusWord;
+    bool messageerror = FALSE;
+    bool busy = TRUE;
+
     while (1) {
 
         int bytesReceived = recvfrom(sock, reinterpret_cast<char*>(&CommandWord), sizeof(CommandWord), 0,
@@ -76,25 +81,42 @@ int main() {
                         &senderSize);
                     memory[subAddress+i] = static_cast<int>(DataWord);
                     cout << "Data " << memory[subAddress + i] << " Written on the address: " << subAddress + i << endl;
-                }
+                }                
+                statusWord = CreateStatusWord(rtAddress, messageerror, busy);
+                int StatusSent = sendto(sock, reinterpret_cast<char*>(&statusWord), sizeof(statusWord), 0,
+                    reinterpret_cast<sockaddr*>(&sender),
+                    sizeof(sender));
             }
 
             if (transmit == 1) {
                 uint16_t data;
-                for (int i = 0;i < wordCount;i++) {
-                    data = memory[subAddress+i];
+                statusWord = CreateStatusWord(rtAddress, messageerror, busy);
+                int StatusSent = sendto(sock, reinterpret_cast<char*>(&statusWord), sizeof(statusWord), 0,
+                    reinterpret_cast<sockaddr*>(&sender),
+                    sizeof(sender));
+                DecodedStatus decodedstat = DecodeStatus(statusWord);
+                if(decodedstat.messageError == 1){
+                    cout << "Error, can't send data." << endl;
+                }
+                else if (decodedstat.messageError == 1) {
+                    cout << "Busy, can't send data." << endl;
+                }
+                else {
+                    for (int i = 0;i < wordCount;i++) {
+                        data = memory[subAddress + i];
 
-                    int bytesSent = sendto(sock, reinterpret_cast<char*>(&data), sizeof(data), 0,
-                        reinterpret_cast<sockaddr*>(&sender),
-                        sizeof(sender));
+                        int bytesSent = sendto(sock, reinterpret_cast<char*>(&data), sizeof(data), 0,
+                            reinterpret_cast<sockaddr*>(&sender),
+                            sizeof(sender));
 
-                    if (bytesSent == SOCKET_ERROR)
-                    {
-                        cout << "Send failed: " << WSAGetLastError() << endl;
-                    }
-                    else
-                    {
-                        cout << "Sent " << bytesSent << " bytes to the BC ";
+                        if (bytesSent == SOCKET_ERROR)
+                        {
+                            cout << "Send failed: " << WSAGetLastError() << endl;
+                        }
+                        else
+                        {
+                            cout << "Sent " << bytesSent << " bytes to the BC ";
+                        }
                     }
                 }
             }

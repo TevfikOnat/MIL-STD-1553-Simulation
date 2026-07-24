@@ -2,6 +2,7 @@
 #include <ws2tcpip.h>
 #include <iostream>
 #include "CommandWord.h"
+#include "StatusWord.h"
 
 #pragma comment(lib, "ws2_32.lib")
 
@@ -30,6 +31,10 @@ int main() {
     destination.sin_port = htons(port);
     InetPton(AF_INET, "127.0.0.1", &destination.sin_addr);
     int destinationSize = sizeof(destination);
+
+    int StatusReceived;
+    uint16_t StatusWord;
+
     while (1) {
         uint16_t cmd = EncodeCommandWord();
         DecodedCommand decodedcmd = DecodeCMD(cmd);
@@ -48,6 +53,7 @@ int main() {
         }
         */
 
+
         if (decodedcmd.transmit == 0) {
             for (int i = 0;i < decodedcmd.wordCount;i++) {
                 uint16_t data = 0;
@@ -57,18 +63,34 @@ int main() {
                     reinterpret_cast<sockaddr*>(&destination),
                     sizeof(destination));
             }
+            StatusReceived = recvfrom(sock, reinterpret_cast<char*>(&StatusWord), sizeof(StatusWord), 0,
+                reinterpret_cast<sockaddr*>(&destination), &destinationSize);
+            DecodedStatus decodedstat = DecodeStatus(StatusWord);
+            if (decodedstat.messageError == 1|| decodedstat.busy == 1) {
+                cout << "RT reported an error" << endl;
+            }
         }
 
         if (decodedcmd.transmit == 1) {
-            for (int i = 0;i < decodedcmd.wordCount;i++) {
-                uint16_t DataWord;
-                int DataReceived = recvfrom(sock, reinterpret_cast<char*>(&DataWord), sizeof(DataWord), 0,
-                    reinterpret_cast<sockaddr*>(&destination), &destinationSize);
-                cout << "Received Data: " << DataWord << endl;
+            StatusReceived = recvfrom(sock, reinterpret_cast<char*>(&StatusWord), sizeof(StatusWord), 0,
+                reinterpret_cast<sockaddr*>(&destination), &destinationSize);
+            DecodedStatus decodedstat = DecodeStatus(StatusWord);
+            if (decodedstat.messageError == 1 || decodedstat.busy == 1){
+                cout << "RT reported an error" << endl;
+                return 0;
             }
-
+            else {
+                for (int i = 0;i < decodedcmd.wordCount;i++) {
+                    uint16_t DataWord;
+                    int DataReceived = recvfrom(sock, reinterpret_cast<char*>(&DataWord), sizeof(DataWord), 0,
+                        reinterpret_cast<sockaddr*>(&destination), &destinationSize);
+                    cout << "Received Data: " << DataWord << endl;
+                }
+            }
+            
         }
     }
+
     closesocket(sock);
     WSACleanup();
 
