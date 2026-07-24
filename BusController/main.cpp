@@ -37,7 +37,7 @@ int main() {
         int bytesSent = sendto(sock, reinterpret_cast<char*>(&cmd), sizeof(cmd), 0,
             reinterpret_cast<sockaddr*>(&destination),
             sizeof(destination));
-
+        /*
         if (bytesSent == SOCKET_ERROR)
         {
             cout << "Send failed: " << WSAGetLastError() << endl;
@@ -46,22 +46,26 @@ int main() {
         {
             cout << "Sent " << bytesSent << " bytes to the rt addres " << static_cast<int>(DecodeCMD(cmd).rtAddress) << endl;
         }
+        */
 
         if (decodedcmd.transmit == 0) {
-            uint16_t data = 0;
-            cout << "Data to send: ";
-            cin >> data;
-            int DataSent = sendto(sock, reinterpret_cast<char*>(&data), sizeof(data), 0,
-                reinterpret_cast<sockaddr*>(&destination),
-                sizeof(destination));
-
+            for (int i = 0;i < decodedcmd.wordCount;i++) {
+                uint16_t data = 0;
+                cout << "Data to send to the address " << decodedcmd.rtAddress + i << " ";
+                cin >> data;
+                int DataSent = sendto(sock, reinterpret_cast<char*>(&data), sizeof(data), 0,
+                    reinterpret_cast<sockaddr*>(&destination),
+                    sizeof(destination));
+            }
         }
 
         if (decodedcmd.transmit == 1) {
-            uint16_t DataWord;
-            int DataReceived = recvfrom(sock, reinterpret_cast<char*>(&DataWord), sizeof(DataWord), 0,
-                reinterpret_cast<sockaddr*>(&destination), &destinationSize);
-            cout << "Received Data: " << DataWord << endl;
+            for (int i = 0;i < decodedcmd.wordCount;i++) {
+                uint16_t DataWord;
+                int DataReceived = recvfrom(sock, reinterpret_cast<char*>(&DataWord), sizeof(DataWord), 0,
+                    reinterpret_cast<sockaddr*>(&destination), &destinationSize);
+                cout << "Received Data: " << DataWord << endl;
+            }
 
         }
     }

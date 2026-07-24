@@ -70,28 +70,32 @@ int main() {
             cout << "Word Count: " << wordCount << endl;
 
             if (transmit == 0) {
-                int DataReceived = recvfrom(sock, reinterpret_cast<char*>(&DataWord), sizeof(DataWord), 0,
-                    reinterpret_cast<sockaddr*>(&sender),
-                    &senderSize);
-                memory[subAddress] = static_cast<int>(DataWord);
-                cout << "Data " << memory[subAddress] << " Written on the address: " << subAddress;
+                for (int i = 0;i < wordCount;i++) {
+                    int DataReceived = recvfrom(sock, reinterpret_cast<char*>(&DataWord), sizeof(DataWord), 0,
+                        reinterpret_cast<sockaddr*>(&sender),
+                        &senderSize);
+                    memory[subAddress+i] = static_cast<int>(DataWord);
+                    cout << "Data " << memory[subAddress + i] << " Written on the address: " << subAddress + i << endl;
+                }
             }
 
             if (transmit == 1) {
-                
-                uint16_t data = memory[subAddress];
+                uint16_t data;
+                for (int i = 0;i < wordCount;i++) {
+                    data = memory[subAddress+i];
 
-                int bytesSent = sendto(sock, reinterpret_cast<char*>(&data), sizeof(data), 0,
-                    reinterpret_cast<sockaddr*>(&sender),
-                    sizeof(sender));
+                    int bytesSent = sendto(sock, reinterpret_cast<char*>(&data), sizeof(data), 0,
+                        reinterpret_cast<sockaddr*>(&sender),
+                        sizeof(sender));
 
-                if (bytesSent == SOCKET_ERROR)
-                {
-                    cout << "Send failed: " << WSAGetLastError() << endl;
-                }
-                else
-                {
-                    cout << "Sent " << bytesSent << " bytes to the BC ";
+                    if (bytesSent == SOCKET_ERROR)
+                    {
+                        cout << "Send failed: " << WSAGetLastError() << endl;
+                    }
+                    else
+                    {
+                        cout << "Sent " << bytesSent << " bytes to the BC ";
+                    }
                 }
             }
         }
