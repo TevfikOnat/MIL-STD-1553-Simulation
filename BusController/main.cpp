@@ -3,6 +3,7 @@
 #include <iostream>
 #include "CommandWord.h"
 #include "StatusWord.h"
+#include "Ports.h"
 
 #pragma comment(lib, "ws2_32.lib")
 
@@ -11,7 +12,6 @@ using namespace std;
 
 int main() {
     WSADATA wsaData;
-    int port = 8888;
 
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
         cout << "WSAStartup failed" << endl;
@@ -26,9 +26,20 @@ int main() {
         return 1;
     }
 
+    sockaddr_in address{};
+    address.sin_family = AF_INET;
+    address.sin_port = htons(Ports::BusController);
+    address.sin_addr.s_addr = INADDR_ANY;
+
+    bind(
+        sock,
+        reinterpret_cast<sockaddr*>(&address),
+        sizeof(address)
+    );
+
     sockaddr_in destination;
     destination.sin_family = AF_INET;
-    destination.sin_port = htons(port);
+    destination.sin_port = htons(Ports::BUS);
     InetPton(AF_INET, "127.0.0.1", &destination.sin_addr);
     int destinationSize = sizeof(destination);
 
@@ -42,6 +53,7 @@ int main() {
         int bytesSent = sendto(sock, reinterpret_cast<char*>(&cmd), sizeof(cmd), 0,
             reinterpret_cast<sockaddr*>(&destination),
             sizeof(destination));
+
         /*
         if (bytesSent == SOCKET_ERROR)
         {
@@ -57,7 +69,7 @@ int main() {
         if (decodedcmd.transmit == 0) {
             for (int i = 0;i < decodedcmd.wordCount;i++) {
                 uint16_t data = 0;
-                cout << "Data to send to the address " << decodedcmd.rtAddress + i << " ";
+                cout << "Data to send to the address " << decodedcmd.rtAddress + i << ": ";
                 cin >> data;
                 int DataSent = sendto(sock, reinterpret_cast<char*>(&data), sizeof(data), 0,
                     reinterpret_cast<sockaddr*>(&destination),

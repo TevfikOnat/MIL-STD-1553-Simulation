@@ -3,6 +3,7 @@
 #include <array>
 #include "CommandWord.h"
 #include "StatusWord.h"
+#include "Ports.h"
 
 #pragma comment(lib, "ws2_32.lib")
 
@@ -11,7 +12,6 @@ using namespace std;
 
 int main() {
     WSADATA wsaData;
-    int port = 8888;
 
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
         cout << "WSAStartup failed" << endl;
@@ -28,7 +28,7 @@ int main() {
 
     sockaddr_in address{};
     address.sin_family = AF_INET;
-    address.sin_port = htons(port);
+    address.sin_port = htons(Ports::RemoteTerminal);
     address.sin_addr.s_addr = INADDR_ANY;
 
     bind(
@@ -43,16 +43,12 @@ int main() {
     uint16_t CommandWord;
     uint16_t DataWord;
 
-      
-
     array<uint16_t, 32> memory;
     uint8_t memAddress = 0;
 
-    memory[8] = 123;
-
     uint16_t statusWord;
     bool messageerror = FALSE;
-    bool busy = TRUE;
+    bool busy = FALSE;
 
     while (1) {
 
@@ -79,7 +75,7 @@ int main() {
                     int DataReceived = recvfrom(sock, reinterpret_cast<char*>(&DataWord), sizeof(DataWord), 0,
                         reinterpret_cast<sockaddr*>(&sender),
                         &senderSize);
-                    memory[subAddress+i] = static_cast<int>(DataWord);
+                    memory[subAddress+i] = DataWord;
                     cout << "Data " << memory[subAddress + i] << " Written on the address: " << subAddress + i << endl;
                 }                
                 statusWord = CreateStatusWord(rtAddress, messageerror, busy);
@@ -98,7 +94,7 @@ int main() {
                 if(decodedstat.messageError == 1){
                     cout << "Error, can't send data." << endl;
                 }
-                else if (decodedstat.messageError == 1) {
+                else if (decodedstat.busy == 1) {
                     cout << "Busy, can't send data." << endl;
                 }
                 else {
@@ -115,7 +111,7 @@ int main() {
                         }
                         else
                         {
-                            cout << "Sent " << bytesSent << " bytes to the BC ";
+                            cout << "Sent " << bytesSent << " bytes to the BC " << endl;
                         }
                     }
                 }
