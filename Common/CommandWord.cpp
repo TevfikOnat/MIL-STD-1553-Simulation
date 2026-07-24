@@ -1,4 +1,5 @@
 #include "CommandWord.h"
+using namespace std;
 
 uint16_t CreateCommandWord(uint8_t rtAddress, uint8_t transmit, uint8_t subAddress, uint8_t wordCount) {
 
@@ -9,6 +10,22 @@ uint16_t CreateCommandWord(uint8_t rtAddress, uint8_t transmit, uint8_t subAddre
     cmd |= wordCount;
 
     return cmd;
+}
+
+uint16_t EncodeCommandWord() {
+    int rtadd;
+    int tr;
+    int sub;
+    int wordC;
+
+    cout << "RT Address, T/R, Subaddress, Word Count: " << endl;
+    cin >> rtadd >> tr >> sub >> wordC;
+
+    return CreateCommandWord(static_cast<uint8_t>(rtadd),
+        static_cast<uint8_t>(tr),
+        static_cast<uint8_t>(sub),
+        static_cast<uint8_t>(wordC));
+
 }
 
 DecodedCommand DecodeCMD(uint16_t cmd)

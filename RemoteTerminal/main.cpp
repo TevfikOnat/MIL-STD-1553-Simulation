@@ -42,41 +42,60 @@ int main() {
     uint16_t CommandWord;
     uint16_t DataWord;
 
-    int bytesReceived = recvfrom(sock, reinterpret_cast<char*>(&CommandWord), sizeof(CommandWord), 0,
-        reinterpret_cast<sockaddr*>(&sender),
-        &senderSize);    
+      
 
     array<uint16_t, 32> memory;
     uint8_t memAddress = 0;
 
-    
-    DecodedCommand command = DecodeCMD(CommandWord);
+    memory[8] = 123;
 
-    int rtAddress = command.rtAddress;
-    int transmit = command.transmit;
-    int subAddress = command.subAddress;
-    int wordCount = command.wordCount;
+    while (1) {
 
-    if (static_cast<int>(command.rtAddress) == 5) {
+        int bytesReceived = recvfrom(sock, reinterpret_cast<char*>(&CommandWord), sizeof(CommandWord), 0,
+            reinterpret_cast<sockaddr*>(&sender),
+            &senderSize);
 
-        cout << "RT Address: " << rtAddress << endl;
-        cout << "Transmit/Receive: " << transmit << endl;
-        cout << "Sub Address: " << subAddress << endl;
-        cout << "Word Count: " << wordCount << endl;
+        DecodedCommand command = DecodeCMD(CommandWord);
 
-        if (transmit == 0) {
-            int DataReceived = recvfrom(sock, reinterpret_cast<char*>(&DataWord), sizeof(DataWord), 0,
-                reinterpret_cast<sockaddr*>(&sender),
-                &senderSize);
-            memory[subAddress] = static_cast<int>(DataWord);
-            cout << "Data " << memory[subAddress] << " Written on the address: " << subAddress;
-        }
+        int rtAddress = command.rtAddress;
+        int transmit = command.transmit;
+        int subAddress = command.subAddress;
+        int wordCount = command.wordCount;
 
-        if (transmit == 1) {
+        if (static_cast<int>(command.rtAddress) == 5) {
 
+            cout << "RT Address: " << rtAddress << endl;
+            cout << "Transmit/Receive: " << transmit << endl;
+            cout << "Sub Address: " << subAddress << endl;
+            cout << "Word Count: " << wordCount << endl;
+
+            if (transmit == 0) {
+                int DataReceived = recvfrom(sock, reinterpret_cast<char*>(&DataWord), sizeof(DataWord), 0,
+                    reinterpret_cast<sockaddr*>(&sender),
+                    &senderSize);
+                memory[subAddress] = static_cast<int>(DataWord);
+                cout << "Data " << memory[subAddress] << " Written on the address: " << subAddress;
+            }
+
+            if (transmit == 1) {
+                
+                uint16_t data = memory[subAddress];
+
+                int bytesSent = sendto(sock, reinterpret_cast<char*>(&data), sizeof(data), 0,
+                    reinterpret_cast<sockaddr*>(&sender),
+                    sizeof(sender));
+
+                if (bytesSent == SOCKET_ERROR)
+                {
+                    cout << "Send failed: " << WSAGetLastError() << endl;
+                }
+                else
+                {
+                    cout << "Sent " << bytesSent << " bytes to the BC ";
+                }
+            }
         }
     }
-
     WSACleanup();
     return 0;
 }
