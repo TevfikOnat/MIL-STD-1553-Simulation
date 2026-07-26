@@ -6,7 +6,11 @@
 
 class BusController {
 public:
+	BusController();
+	~BusController();
+
 	void Run();
+
 private:
 	void InitializeSocket();
 
@@ -15,4 +19,12 @@ private:
 
 	void ReceiveData();
 	void ReceiveStatus();
+
+private:
+	SOCKET sock = INVALID_SOCKET;
+	sockaddr_in address{};
+	sockaddr_in destination{};
+	sockaddr_in sender{};
+	int destinationSize = sizeof(destination);
+	int senderSize = sizeof(sender);
 };

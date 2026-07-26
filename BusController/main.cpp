@@ -6,6 +6,7 @@
 #include "Ports.h"
 
 #pragma comment(lib, "ws2_32.lib")
+#pragma comment(lib, "ws2_32.lib")
 
 using namespace std;
 
