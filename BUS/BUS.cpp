@@ -52,14 +52,10 @@ void BUS::ReceivePacket() {
     }
 }
 
-void BUS::ForwardToRT(const char* buffer, int bytesReceived){
-
-    
+void BUS::ForwardToRT(const char* buffer, int bytesReceived){        
     sendto(sock, buffer, bytesReceived, 0,
         reinterpret_cast<sockaddr*>(&buscontroller),
-        sizeof(buscontroller));
-    
-
+        sizeof(buscontroller)); 
 }
 
 void BUS::ForwardToBC(const char* buffer, int bytesReceived) {

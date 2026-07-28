@@ -3,6 +3,10 @@
 #include <iostream>
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include "StatusWord.h"
+#include "CommandWord.h"
+
+#pragma comment(lib, "ws2_32.lib")
 
 class BusController {
 public:
@@ -13,12 +17,13 @@ public:
 
 private:
 	void InitializeSocket();
+	void CloseSocket(SOCKET sock);
 
 	void SendCommand();
-	void SendData();
+	void SendData(DecodedCommand decodedcmd);
 
 	void ReceiveData();
-	void ReceiveStatus();
+	DecodedStatus ReceiveStatus();
 
 private:
 	SOCKET sock = INVALID_SOCKET;
@@ -26,5 +31,6 @@ private:
 	sockaddr_in destination{};
 	sockaddr_in sender{};
 	int destinationSize = sizeof(destination);
-	int senderSize = sizeof(sender);
+	int StatusReceived;
+	DecodedCommand decodedcmd;
 };

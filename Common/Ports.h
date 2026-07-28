@@ -6,5 +6,5 @@ namespace Ports {
 
 	constexpr uint16_t BUS = 5100;
 
-	constexpr uint16_t RemoteTerminal= 7000;
+	constexpr uint16_t RemoteTerminal = 7000;
 }
