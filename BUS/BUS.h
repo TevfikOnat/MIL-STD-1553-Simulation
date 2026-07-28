@@ -27,7 +27,7 @@ private:
 	SOCKET sock = INVALID_SOCKET;
 
     sockaddr_in address{};
-	sockaddr_in rt1{};
+	sockaddr_in rtSockets[5]{};
 	sockaddr_in buscontroller{};
 	sockaddr_in sender{};
 

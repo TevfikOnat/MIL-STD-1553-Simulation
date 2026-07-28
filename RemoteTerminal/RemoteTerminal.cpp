@@ -1,14 +1,19 @@
 #include "RemoteTerminal.h"
 
 RemoteTerminal::RemoteTerminal() {
-	InitializeSocket();
+    if (!InitializeSocket()) {
+        exit(EXIT_FAILURE);
+    }
 }	
 
 RemoteTerminal::~RemoteTerminal() {
 	CloseSocket(sock);
 }
 
-void RemoteTerminal::InitializeSocket() {
+bool RemoteTerminal::InitializeSocket() {
+
+    
+
     WSADATA wsaData;
 
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
@@ -22,17 +27,37 @@ void RemoteTerminal::InitializeSocket() {
     }
 
     address.sin_family = AF_INET;
-    address.sin_port = htons(Ports::RemoteTerminal);
     address.sin_addr.s_addr = INADDR_ANY;
+    for (port = Ports::RemoteTerminals[0]; port <= Ports::RemoteTerminals.back(); port++) {
+        address.sin_port = htons(port);
+
+        if (bind(sock, reinterpret_cast<sockaddr*>(&address), sizeof(address)) == 0) {
+            RT = port - 6999;
+            break;
+        }
+        else {
+
+            if (port == Ports::RemoteTerminals.back()) {
+                cout << "All ports are full" << endl;
+                return false;
+            }
+
+            else {
+                cout << "Port " << port << " is full" << endl;
+            }
+
+        }
+    }
+
+    
+    cout << "Assigned to the port: " << port << " RT address: " << RT << endl;
 
     destination.sin_family = AF_INET;
     destination.sin_port = htons(Ports::BUS);
     destination.sin_addr.s_addr = INADDR_ANY;
     InetPton(AF_INET, "127.0.0.1", &destination.sin_addr);
 
-    if (bind(sock, reinterpret_cast<sockaddr*>(&address), sizeof(address)) == SOCKET_ERROR) {
-        cout << "Bind failed: " << WSAGetLastError() << endl;
-    }
+    return true;
 }
 
 void RemoteTerminal::CloseSocket(SOCKET sock) {
@@ -50,31 +75,27 @@ void RemoteTerminal::ReceiveCommand() {
     }
 
     command = DecodeCMD(CommandWord);
-
-    cout << "RT Address: " << static_cast<int>(command.rtAddress) << endl;
-    cout << "Transmit/Receive: " << static_cast<int>(command.transmit) << endl;
-    cout << "Sub Address: " << static_cast<int>(command.subAddress) << endl;
-    cout << "Word Count: " << static_cast<int>(command.wordCount) << endl;
 }
 
 void RemoteTerminal::ReceiveData(int wordCount,int subAddress) {
     for (int i = 0;i < wordCount;i++) {
+
+        if (subAddress + i == memory.size()) {
+            messageerror = true;
+            return;
+        }
+
         int DataReceived = recvfrom(sock, reinterpret_cast<char*>(&DataWord), sizeof(DataWord), 0,
             reinterpret_cast<sockaddr*>(&sender),
             &senderSize);
-
-        if (subAddress + i > memory.size()) {
-            messageerror = true;
-        }
-        else {
-        memory[subAddress + i] = DataWord;
-        }
+                    
 
         if (DataReceived == SOCKET_ERROR){
             cout << "Receive failed: " << WSAGetLastError() << endl;
             return;
         }
         else {
+            memory[subAddress + i] = DataWord;
             cout << "Data " << memory[subAddress + i] << " Written on the address: " << subAddress + i << endl;
         }
     }
@@ -83,19 +104,26 @@ void RemoteTerminal::ReceiveData(int wordCount,int subAddress) {
 void RemoteTerminal::SendData(int wordCount, int subAddress) {
     uint16_t data;
     for (int i = 0;i < wordCount;i++) {
-        data = memory[subAddress + i];
 
-        int bytesSent = sendto(sock, reinterpret_cast<char*>(&data), sizeof(data), 0,
-            reinterpret_cast<sockaddr*>(&sender),
-            sizeof(sender));
-
-        if (bytesSent == SOCKET_ERROR)
-        {
-            cout << "Send failed: " << WSAGetLastError() << endl;
+        if (subAddress + i == memory.size()) {
+            messageerror = true;
+            return;
         }
-        else
-        {
-            cout << "Sent " << bytesSent << " bytes to the BC " << endl;
+        else {
+            data = memory[subAddress + i];
+
+            int bytesSent = sendto(sock, reinterpret_cast<char*>(&data), sizeof(data), 0,
+                reinterpret_cast<sockaddr*>(&sender),
+                sizeof(sender));
+
+            if (bytesSent == SOCKET_ERROR)
+            {
+                cout << "Send failed: " << WSAGetLastError() << endl;
+            }
+            else
+            {
+                cout << "Sent " << bytesSent << " bytes to the BC " << endl;
+            }
         }
     }
 }
@@ -120,7 +148,7 @@ void RemoteTerminal::SendStatus(int rtAddress) {
 void RemoteTerminal::Run() {
     while (true) {
         ReceiveCommand();
-        if (static_cast<int>(command.rtAddress) == 5) {
+        if (static_cast<int>(command.rtAddress) == RT) {
             if (command.transmit == 0) {
                 ReceiveData(command.wordCount, command.subAddress);
                 SendStatus(command.rtAddress);

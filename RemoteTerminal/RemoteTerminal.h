@@ -17,7 +17,7 @@ public:
 
 	void Run();
 private:
-	void InitializeSocket();
+	bool InitializeSocket();
 	void CloseSocket(SOCKET sock);
 
 	void ReceiveCommand();
@@ -27,10 +27,14 @@ private:
 	void SendStatus(int rtAddress);
 
 private:
+	int RT;
+	uint16_t port;
+
 	SOCKET sock = INVALID_SOCKET;
 	sockaddr_in address{};
 	sockaddr_in destination{};
 	sockaddr_in sender{};
+
 	int destinationSize = sizeof(destination);
 	int senderSize = sizeof(sender);
 
