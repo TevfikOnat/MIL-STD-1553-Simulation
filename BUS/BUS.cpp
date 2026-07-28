@@ -34,6 +34,10 @@ void BUS::InitializeSocket() {
     buscontroller.sin_port = htons(Ports::BusController);
     InetPton(AF_INET, "127.0.0.1", &buscontroller.sin_addr);
 
+    busmonitor.sin_family = AF_INET;
+    busmonitor.sin_port = htons(Ports::BusMonitor);
+    InetPton(AF_INET, "127.0.0.1", &busmonitor.sin_addr);
+
 	if (bind(sock, reinterpret_cast<sockaddr*>(&address), sizeof(address)) == SOCKET_ERROR) {
 		cout << "Bind failed: " << WSAGetLastError() << endl;
 	}
@@ -48,10 +52,12 @@ void BUS::ReceivePacket() {
 
     if (ntohs(sender.sin_port) == Ports::BusController) {
         ForwardToBC(reinterpret_cast<const char*>(&buffer), bytesReceived);
-
+        ForwardToBM(reinterpret_cast<const char*>(&buffer), bytesReceived);
     }
     else if (ntohs(sender.sin_port) >= 7000 || ntohs(sender.sin_port) <= 7004) {
         ForwardToRT(reinterpret_cast<const char*>(&buffer), bytesReceived);
+        ForwardToBM(reinterpret_cast<const char*>(&buffer), bytesReceived);
+
     }
 }
 
@@ -67,6 +73,12 @@ void BUS::ForwardToBC(const char* buffer, int bytesReceived) {
             reinterpret_cast<sockaddr*>(&rtSockets[i]),
             sizeof(rtSockets[i]));
     }
+}
+
+void BUS::ForwardToBM(const char* buffer, int bytesReceived) {
+    sendto(sock, buffer, bytesReceived, 0,
+        reinterpret_cast<sockaddr*>(&busmonitor),
+        sizeof(busmonitor));
 }
 
 void BUS::Run() {

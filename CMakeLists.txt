@@ -18,11 +18,17 @@ add_executable(RemoteTerminal
  
 add_executable(BUS
     "BUS/main.cpp" "BUS/BUS.cpp")
+     
+add_executable(BusMonitor
+    "BusMonitor/main.cpp" "BusMonitor/BusMonitor.cpp")
 
 target_include_directories(BusController PRIVATE Common)
 target_include_directories(RemoteTerminal PRIVATE Common)
 target_include_directories(BUS PRIVATE Common)
+target_include_directories(BusMonitor PRIVATE Common)
+
 
 target_link_libraries(BusController PRIVATE Common)
 target_link_libraries(RemoteTerminal PRIVATE Common)
 target_link_libraries(BUS PRIVATE Common)
+target_link_libraries(BusMonitor PRIVATE Common)

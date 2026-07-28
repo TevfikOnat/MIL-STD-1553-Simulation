@@ -28,8 +28,7 @@ void BusController::InitializeSocket() {
 
     if (bind(sock, reinterpret_cast<sockaddr*>(&address), sizeof(address)) == SOCKET_ERROR) {
         cout << "Bind failed: " << WSAGetLastError() << endl;
-    }
-    
+    }    
 }
 
 void BusController::CloseSocket(SOCKET sock) {

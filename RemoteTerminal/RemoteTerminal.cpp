@@ -11,8 +11,7 @@ RemoteTerminal::~RemoteTerminal() {
 }
 
 bool RemoteTerminal::InitializeSocket() {
-
-    
+      
 
     WSADATA wsaData;
 
@@ -105,37 +104,44 @@ void RemoteTerminal::SendData(int wordCount, int subAddress) {
     uint16_t data;
     for (int i = 0;i < wordCount;i++) {
 
-        if (subAddress + i == memory.size()) {
-            messageerror = true;
-            return;
+
+        data = memory[subAddress + i];
+
+        int bytesSent = sendto(sock, reinterpret_cast<char*>(&data), sizeof(data), 0,
+            reinterpret_cast<sockaddr*>(&sender),
+            sizeof(sender));
+
+        if (bytesSent == SOCKET_ERROR)
+        {
+            cout << "Send failed: " << WSAGetLastError() << endl;
         }
-        else {
-            data = memory[subAddress + i];
+        else
+        {
+            cout << "Sent " << bytesSent << " bytes to the BC " << endl;
 
-            int bytesSent = sendto(sock, reinterpret_cast<char*>(&data), sizeof(data), 0,
-                reinterpret_cast<sockaddr*>(&sender),
-                sizeof(sender));
-
-            if (bytesSent == SOCKET_ERROR)
-            {
-                cout << "Send failed: " << WSAGetLastError() << endl;
-            }
-            else
-            {
-                cout << "Sent " << bytesSent << " bytes to the BC " << endl;
-            }
         }
     }
 }
 
-void RemoteTerminal::SendStatus(int rtAddress) {
-    statusWord = CreateStatusWord(rtAddress, messageerror, busy);
+void RemoteTerminal::SendStatus(DecodedCommand command) {
+
+    if (static_cast<int>(command.subAddress) + static_cast<int>(command.wordCount) > memory.size()-1) {
+        messageerror = true;
+    }
+    else {
+        messageerror = false;
+    }
+
+    statusWord = CreateStatusWord(command.rtAddress, messageerror, busy);
     int StatusSent = sendto(sock, reinterpret_cast<char*>(&statusWord), sizeof(statusWord), 0,
         reinterpret_cast<sockaddr*>(&sender),
         sizeof(sender));
     DecodedStatus decodedstat = DecodeStatus(statusWord);
+
+
+
     if (decodedstat.messageError == 1) {
-        cout << "Error, can't send data." << endl;
+        cout << "Error, can't send/read data." << endl;
     }
     else if (decodedstat.busy == 1) {
         cout << "Busy, can't send data." << endl;
@@ -151,10 +157,10 @@ void RemoteTerminal::Run() {
         if (static_cast<int>(command.rtAddress) == RT) {
             if (command.transmit == 0) {
                 ReceiveData(command.wordCount, command.subAddress);
-                SendStatus(command.rtAddress);
+                SendStatus(command);
             }
             else if (command.transmit == 1) {
-                SendStatus(command.rtAddress);
+                SendStatus(command);
                 SendData(command.wordCount, command.subAddress);
             }
         }

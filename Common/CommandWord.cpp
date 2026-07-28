@@ -18,8 +18,41 @@ uint16_t EncodeCommandWord() {
     int sub;
     int wordC;
 
-    cout << "RT Address, T/R, Subaddress, Word Count: " << endl;
-    cin >> rtadd >> tr >> sub >> wordC;
+    while (true){
+
+        cout << "RT Address, T/R, Subaddress, Word Count: ";
+
+        cin >> rtadd >> tr >> sub >> wordC;
+
+        if (cin.fail()){
+            cin.clear();
+            cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+            cout << "Please enter only numbers(in intervals)." << endl;
+            continue;
+        }
+
+        if (rtadd < 1 || rtadd > 31){
+            cout << "RT Address must be between 0 and 31." << endl;
+            continue;
+        }
+
+        if (tr != 0 && tr != 1){
+            cout << "T/R must be 0 or 1." << endl;
+            continue;
+        }
+
+        if (sub < 0 || sub > 31){
+            cout << "Subaddress must be between 0 and 31." << endl;
+            continue;
+        }
+
+        if (wordC < 1 || wordC > 32){
+            cout << "Word Count must be between 1 and 32." << endl;
+            continue;
+        }
+
+        break;
+    }
 
     return CreateCommandWord(static_cast<uint8_t>(rtadd),
         static_cast<uint8_t>(tr),

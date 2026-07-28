@@ -23,12 +23,16 @@ private:
 
 	void ForwardToBC(const char* buffer, int bytesReceived);
 
+	void ForwardToBM(const char* buffer, int bytesReceived);
+
+
 private:
 	SOCKET sock = INVALID_SOCKET;
 
     sockaddr_in address{};
 	sockaddr_in rtSockets[5]{};
 	sockaddr_in buscontroller{};
+	sockaddr_in busmonitor{};
 	sockaddr_in sender{};
 
 	int senderSize = sizeof(sender);

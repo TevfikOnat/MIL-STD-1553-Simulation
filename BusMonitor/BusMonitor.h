@@ -1,4 +1,5 @@
 #pragma once
+
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <iostream>
@@ -9,45 +10,36 @@
 
 #pragma comment(lib, "ws2_32.lib")
 
-using namespace std;
-
-class RemoteTerminal {
+class BusMonitor {
 public:
-	RemoteTerminal();
-	~RemoteTerminal();
+	BusMonitor();
+	~BusMonitor();
 
 	void Run();
+
 private:
-	bool InitializeSocket();
+	void InitializeSocket();
 	void CloseSocket(SOCKET sock);
 
 	void ReceiveCommand();
-
-	void ReceiveData(int wordCount, int subAddress);
-	void SendData(int WordCount, int subAddress);
-	void SendStatus(DecodedCommand command);
+	void ReceiveData();
+	void ReceiveStatus();
 
 private:
-	int RT;
-	uint16_t port;
-
 	SOCKET sock = INVALID_SOCKET;
 	sockaddr_in address{};
-	sockaddr_in destination{};
 	sockaddr_in sender{};
 
-	int destinationSize = sizeof(destination);
 	int senderSize = sizeof(sender);
-
 	DecodedCommand command;
-
-	array<uint16_t, 32> memory;
-	uint8_t memAddress = 0;
 
 	uint16_t CommandWord;
 	uint16_t DataWord;
 	uint16_t statusWord;
-	
+
 	bool messageerror = FALSE;
 	bool busy = FALSE;
+
+	uint8_t memorysize = 31;
+
 };
