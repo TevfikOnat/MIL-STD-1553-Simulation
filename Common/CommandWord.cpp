@@ -50,6 +50,9 @@ uint16_t EncodeCommandWord() {
             cout << "Word Count must be between 1 and 32." << endl;
             continue;
         }
+        else if (wordC == 32) {
+            wordC = 0;
+        }
 
         break;
     }
@@ -71,6 +74,9 @@ DecodedCommand DecodeCMD(uint16_t cmd)
     decoded.transmit = (cmd >> 10) & 0x01;
     decoded.subAddress = (cmd >> 5) & 0x1F;
     decoded.wordCount = cmd & 0x1F;
+	if (decoded.wordCount == 0) {
+		decoded.wordCount = 32;
+	}   
 
     return decoded;
 }

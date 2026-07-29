@@ -51,23 +51,23 @@ void BUS::ReceivePacket() {
         &senderSize);
 
     if (ntohs(sender.sin_port) == Ports::BusController) {
-        ForwardToBC(reinterpret_cast<const char*>(&buffer), bytesReceived);
+        ForwardToRT(reinterpret_cast<const char*>(&buffer), bytesReceived);
         ForwardToBM(reinterpret_cast<const char*>(&buffer), bytesReceived);
     }
-    else if (ntohs(sender.sin_port) >= 7000 || ntohs(sender.sin_port) <= 7004) {
-        ForwardToRT(reinterpret_cast<const char*>(&buffer), bytesReceived);
+    else if (ntohs(sender.sin_port) >= 7000 && ntohs(sender.sin_port) <= 7004) {
+        ForwardToBC(reinterpret_cast<const char*>(&buffer), bytesReceived);
         ForwardToBM(reinterpret_cast<const char*>(&buffer), bytesReceived);
 
     }
 }
 
-void BUS::ForwardToRT(const char* buffer, int bytesReceived){        
+void BUS::ForwardToBC(const char* buffer, int bytesReceived){        
     sendto(sock, buffer, bytesReceived, 0,
         reinterpret_cast<sockaddr*>(&buscontroller),
         sizeof(buscontroller)); 
 }
 
-void BUS::ForwardToBC(const char* buffer, int bytesReceived) {
+void BUS::ForwardToRT(const char* buffer, int bytesReceived) {
     for (int i = 0; i < Ports::RemoteTerminals.size(); i++) {
         sendto(sock, buffer, bytesReceived, 0,
             reinterpret_cast<sockaddr*>(&rtSockets[i]),

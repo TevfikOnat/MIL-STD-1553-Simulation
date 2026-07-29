@@ -79,15 +79,15 @@ void RemoteTerminal::ReceiveCommand() {
 void RemoteTerminal::ReceiveData(int wordCount,int subAddress) {
     for (int i = 0;i < wordCount;i++) {
 
+        int DataReceived = recvfrom(sock, reinterpret_cast<char*>(&DataWord), sizeof(DataWord), 0,
+            reinterpret_cast<sockaddr*>(&sender),
+            &senderSize);
+
         if (subAddress + i == memory.size()) {
             messageerror = true;
             return;
         }
-
-        int DataReceived = recvfrom(sock, reinterpret_cast<char*>(&DataWord), sizeof(DataWord), 0,
-            reinterpret_cast<sockaddr*>(&sender),
-            &senderSize);
-                    
+                           
 
         if (DataReceived == SOCKET_ERROR){
             cout << "Receive failed: " << WSAGetLastError() << endl;
@@ -104,8 +104,13 @@ void RemoteTerminal::SendData(int wordCount, int subAddress) {
     uint16_t data;
     for (int i = 0;i < wordCount;i++) {
 
+        if (subAddress + i == memory.size()) {
+            messageerror = true;
+            return;
+        }
 
         data = memory[subAddress + i];
+
 
         int bytesSent = sendto(sock, reinterpret_cast<char*>(&data), sizeof(data), 0,
             reinterpret_cast<sockaddr*>(&sender),
