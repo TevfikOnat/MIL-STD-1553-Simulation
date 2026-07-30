@@ -18,9 +18,9 @@ bool CheckParity(uint32_t raw) {
 	return calculatedParity == receivedParity;
 }
 
-uint32_t CreateARINCWord(const ARINCWord& word) {
+uint32_t CreateARINCWord(ARINCWord& word) {
 	int32_t raw = 0;
-
+	word.ssm = GenerateSSM();
 	raw |= static_cast<uint32_t>(word.label);
 
 	raw |= (static_cast<uint32_t>(word.sdi) & 0x03) << 8;
@@ -29,8 +29,6 @@ uint32_t CreateARINCWord(const ARINCWord& word) {
 
 	raw |= (static_cast<uint32_t>(word.ssm) & 0x03) << 29;
 
-
-	
 	bool parity = CalculateOddParity(raw);
 	raw |= static_cast<uint32_t>(parity) << 31; 
 	return raw;
@@ -48,7 +46,7 @@ ARINCWord DecodeARINCWord(uint32_t rawWord) {
 	}
 
 	word.data = data;
-	word.ssm = static_cast<uint8_t>((rawWord >> 29) & 0x03);
+	word.ssm = static_cast<SSM>((rawWord >> 29) & 0x03);
 	word.parity = (rawWord >> 31) & 0x01;
 	return word;
 }
@@ -57,4 +55,19 @@ void Delay(int milliseconds) {
 	std::this_thread::sleep_for(std::chrono::milliseconds(milliseconds));
 }
 
+SSM GenerateSSM() {
+	std::mt19937 generator{ std::random_device{}() };
+	std::uniform_int_distribution<int> SSMroll{ 1, 100 };
 
+	int roll = SSMroll(generator);
+	if (roll == 1) {
+		return SSM::FailureWarning;
+	}
+	else if (roll == 2) {
+		return SSM::NoComputedData;
+	}
+	else{
+		return SSM::NormalOperation;
+	}
+
+}

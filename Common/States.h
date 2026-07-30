@@ -3,8 +3,8 @@
 
 struct GPSState
 {
-	uint32_t latitude = 39000000;
-	uint32_t longitude = 32000000;
+	uint32_t latitude = 50;
+	uint32_t longitude = 30;
 	uint32_t altitude = 15000;
 	uint32_t groundSpeed = 280;
 

@@ -1,4 +1,5 @@
 #include "ADC.h"
+#include "Ports.h"
 #include <iostream>
 
 ADC::ADC() {
@@ -29,11 +30,11 @@ bool ADC::InitializeSocket() {
 	}
 
 	address.sin_family = AF_INET;
-	address.sin_port = htons(8003);
+	address.sin_port = htons(Ports::ADC);
 	address.sin_addr.s_addr = INADDR_ANY;
 
 	destination.sin_family = AF_INET;
-	destination.sin_port = htons(8000);
+	destination.sin_port = htons(Ports::MissionComputer);
 	destination.sin_addr.s_addr = INADDR_ANY;
 	InetPton(AF_INET, "127.0.0.1", &destination.sin_addr);
 
@@ -54,12 +55,16 @@ void ADC::UpdateAirspeed() {
 	adcState.airspeed += airspeedDistribution(generator);
 	adcWord.label = Label::Airspeed;
 	adcWord.data = adcState.airspeed;
+	adcWord.ssm = SSM::FunctionalTest;
 }
 
 void ADC::UpdateBaroAltitude() {
 	adcState.baroAltitude += baroaltitudeDistribution(generator);
 	adcWord.label = Label::BaroAltitude;
 	adcWord.data = adcState.baroAltitude;
+	adcWord.ssm = SSM::NormalOperation;
+
+
 }
 
 void ADC::SendARINCWord(uint32_t raw) {

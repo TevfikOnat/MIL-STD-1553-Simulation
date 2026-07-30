@@ -21,6 +21,7 @@ private:
 
 	void ReceiveState();
 	void Update();
+	void SSMCheck(int32_t value, SSM ssm);
 	void Print();
 
 
@@ -37,4 +38,6 @@ private:
 	ADCState adcState;
 	IRSState irsState;
 	RadioState radioState;
+
+
 };

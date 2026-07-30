@@ -1,6 +1,6 @@
 #pragma once
-
 #include <cstdint>
+#include <random>
 
 enum class Label : uint8_t
 {
@@ -19,18 +19,27 @@ enum class Label : uint8_t
 	RadioAltitude =	201
 };
 
+enum class SSM : uint8_t
+{
+	NormalOperation = 0b00,
+	FunctionalTest = 0b01,
+	NoComputedData = 0b10,
+	FailureWarning = 0b11,
+};
+
 
 struct ARINCWord
 {
 	Label label;
 	uint8_t sdi;
 	int32_t data;
-	uint8_t ssm;
+	SSM ssm = SSM::NormalOperation;
 	bool parity;
 
 };
 
+SSM GenerateSSM();
 void Delay(int milliseconds); 
-uint32_t CreateARINCWord(const ARINCWord& word);
+uint32_t CreateARINCWord(ARINCWord& word);
 ARINCWord DecodeARINCWord(uint32_t rawWord);
 bool CalculateOddParity(uint32_t raw);
