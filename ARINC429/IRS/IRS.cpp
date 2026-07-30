@@ -1,4 +1,5 @@
 #include "IRS.h"
+#include "Ports.h"
 #include <iostream>
 
 IRS::IRS() {
@@ -28,11 +29,11 @@ bool IRS::InitializeSocket() {
 	}
 
 	address.sin_family = AF_INET;
-	address.sin_port = htons(8004);
+	address.sin_port = htons(Ports::IRS);
 	address.sin_addr.s_addr = INADDR_ANY;
 
 	destination.sin_family = AF_INET;
-	destination.sin_port = htons(8000);
+	destination.sin_port = htons(Ports::MissionComputer);
 	destination.sin_addr.s_addr = INADDR_ANY;
 	InetPton(AF_INET, "127.0.0.1", &destination.sin_addr);
 

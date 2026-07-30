@@ -1,17 +1,19 @@
 #pragma once
+#pragma comment(lib, "ws2_32.lib")
 
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include <cstdint>
+#include <random>
 #include "ARINCWord.h"
 #include "States.h"
 #include "AircraftState.h"
 
-#pragma comment(lib, "ws2_32.lib")
 
-class Display {
+class MissionComputer {
 public:
-	Display();
-	~Display();
+	MissionComputer();
+	~MissionComputer();
 
 	void Run();
 
@@ -19,22 +21,20 @@ private:
 	bool InitializeSocket();
 	void CloseSocket();
 
-	void ReceiveState();
-	void Update();
-	void Print();
+	void ReceiveARINCWord();
+	bool DecodeWord();
+	void UpdateState();
 
+	void SendToDisplay();
 
 private:
 	SOCKET sock = INVALID_SOCKET;
 	sockaddr_in address{};
+	sockaddr_in destination{};
 	sockaddr_in sender{};
 
 	uint32_t raw;
-	AircraftState aircraftstate;
 	ARINCWord word;
 
-	GPSState gpsState;
-	ADCState adcState;
-	IRSState irsState;
-	RadioState radioState;
+	AircraftState aircraftState;
 };

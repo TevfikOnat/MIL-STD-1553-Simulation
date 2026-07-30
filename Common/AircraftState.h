@@ -15,8 +15,8 @@ struct AircraftState
 
     // IRS
     uint32_t heading = 0;
-    uint32_t roll = 0;
-    uint32_t pitch = 0;
+    int32_t roll = 0;
+    int32_t pitch = 0;
 
     // Radio Altimeter
     uint32_t radioAltitude = 0;

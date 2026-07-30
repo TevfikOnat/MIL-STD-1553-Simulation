@@ -1,4 +1,5 @@
 #include "Display.h"
+#include "Ports.h"
 #include <iostream>
 
 Display::Display() {
@@ -29,7 +30,7 @@ bool Display::InitializeSocket() {
     }
 
     address.sin_family = AF_INET;
-    address.sin_port = htons(8000);
+    address.sin_port = htons(Ports::Display);
     address.sin_addr.s_addr = INADDR_ANY;
 
     if (bind(sock, reinterpret_cast<sockaddr*>(&address), sizeof(address)) == SOCKET_ERROR) {
@@ -44,88 +45,45 @@ void Display::CloseSocket() {
 	WSACleanup();
 }  
 
-void Display::ReceiveARINCWord() {
+void Display::ReceiveState() {
 	int senderSize = sizeof(sender);
-	int bytesReceived = recvfrom(sock, reinterpret_cast<char*>(&raw), sizeof(raw), 0,
+	int bytesReceived = recvfrom(sock, reinterpret_cast<char*>(&aircraftstate), sizeof(aircraftstate), 0,
 		reinterpret_cast<sockaddr*>(&sender), &senderSize);
 	if (bytesReceived == SOCKET_ERROR) {
 		std::cout << "Receive failed: " << WSAGetLastError() << std::endl;
 	}
-	else {
-		word = DecodeARINCWord(raw);
-	}
 }
 
-void Display::Update() {
-	switch (word.label) {
-	case Label::GPSAltitude:
-		gpsState.altitude = word.data;
-		break;
-	case Label::groundSpeed:
-		gpsState.groundSpeed = word.data;
-		break;
-	case Label::Latitude:
-		gpsState.latitude = word.data;
-		break;
-	case Label::Longitude:
-		gpsState.longitude = word.data;
-		break;
-	case Label::BaroAltitude:
-		adcState.baroAltitude = word.data;
-		break;
-	case Label::Airspeed:
-		adcState.airspeed = word.data;
-		break;
-	case Label::Heading:
-		irsState.heading = word.data;
-		break;
-	case Label::Roll:
-		irsState.roll = word.data;
-		break;
-	case Label::Pitch:
-		irsState.pitch = word.data;
-		break;
-	case Label::RadioAltitude:
-		radioState.radioAltitude = word.data;
-		break;
-	default:
-		std::cout << "Error: Unknown label" << std::endl;
-	}
-}
 
 void Display::Print() {
 
 	std::system("cls");
 	std::cout << "**GPS DATA**" << std::endl;
-	std::cout << "Altitude: " << gpsState.altitude << std::endl;
-	std::cout << "Ground Speed: " << gpsState.groundSpeed << std::endl;
-	std::cout << "Latitude: " << gpsState.latitude << std::endl;
-	std::cout << "Longitude: " << gpsState.longitude << std::endl;
+	std::cout << "Altitude: " << aircraftstate.gpsAltitude << std::endl;
+	std::cout << "Ground Speed: " << aircraftstate.groundSpeed << std::endl;
+	std::cout << "Latitude: " << aircraftstate.latitude << std::endl;
+	std::cout << "Longitude: " << aircraftstate.longitude << std::endl;
 
 	std::cout << "-------------------------" << std::endl;
 	std::cout << "**ADC DATA**" << std::endl;
-	std::cout << "Baro Altitude: " << adcState.baroAltitude << std::endl;
-	std::cout << "Airspeed: " << adcState.airspeed << std::endl;
+	std::cout << "Baro Altitude: " << aircraftstate.baroAltitude << std::endl;
+	std::cout << "Airspeed: " << aircraftstate.airspeed << std::endl;
 
 	std::cout << "-------------------------" << std::endl;
 	std::cout << "**IRS DATA**" << std::endl;
-	std::cout << "Heading: " << irsState.heading << std::endl;
-	std::cout << "Roll: " << irsState.roll << std::endl;
-	std::cout << "Pitch: " << irsState.pitch << std::endl;
+	std::cout << "Heading: " << aircraftstate.heading << std::endl;
+	std::cout << "Roll: " << aircraftstate.roll << std::endl;
+	std::cout << "Pitch: " << aircraftstate.pitch << std::endl;
 
 	std::cout << "-------------------------" << std::endl;
 	std::cout << "**RADIO DATA**" << std::endl;
-	std::cout << "Radio Altitude: " << radioState.radioAltitude << std::endl;
+	std::cout << "Radio Altitude: " << aircraftstate.radioAltitude << std::endl;
 
 }
 
 void Display::Run() {
 	while (true) {
-		for (int i = 0; i < 10; i++)
-		{
-			ReceiveARINCWord();
-			Update();
-		}
+		ReceiveState();
 		Print();
 	}
 }

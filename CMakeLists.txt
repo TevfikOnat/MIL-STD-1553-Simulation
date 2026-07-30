@@ -29,7 +29,7 @@ add_executable(GPS
     "ARINC429/GPS/main.cpp"  "ARINC429/GPS/GPS.cpp" )
 
 add_executable(MissionComputer
-    "MissionComputer/main.cpp"  )
+    "MissionComputer/main.cpp"  "MissionComputer/MissionComputer.cpp")
 
 add_executable(ADC 
     "ARINC429/ADC/main.cpp"  "ARINC429/ADC/ADC.cpp")  
