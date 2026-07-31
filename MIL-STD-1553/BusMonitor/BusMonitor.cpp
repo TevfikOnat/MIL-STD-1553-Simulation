@@ -117,6 +117,7 @@ void BusMonitor::ClearScreen() {
 }
 
 void BusMonitor::Print() {
+
     ClearScreen();
     std::cout << "----------BUS MONITOR----------" << std::endl;
     std::cout << "Words Sent: " << wordsSent << std::endl;
@@ -124,29 +125,31 @@ void BusMonitor::Print() {
     std::cout << "Data Words: " << dataSent << std::endl;
     std::cout << "Status Words: " << statusSent << std::endl;
 
-    std::cout << "BC->RT" << static_cast<int>(command.rtAddress) << " : Command" << endl;
+    std::cout << std::fixed << std::setprecision(1);
+    for (int i = 0;i < 4;i++) {
+        std::cout << "RT" << i + 1 << "->"
+            << " Msg: " << static_cast<int>(RTs[i].messageCount)
+            << "  Busy: " << static_cast<int>(RTs[i].busyCount) << " (" << RTs[i].busyPercent << "%)"
+            << "  Error: " << static_cast<int>(RTs[i].meCount) << " (" << RTs[i].mePercent << "%)"
+            << '\n';
+    }
+}
+
+void BusMonitor::ErrorLog() {
+    Terminal = static_cast<int>(command.rtAddress);
+    TerminalAddress = Terminal - 1;
 
     if (decodedstat.busy == 1) {
-        std::cout << "RT" << static_cast<int>(command.rtAddress) << "->BC" << " : BUSY";
-        if (decodedstat.messageError == 1) {
-            std::cout << " | MESSAGE ERROR " << endl;
-        }
-        else
-            std::cout << std::endl;
+        RTs[TerminalAddress].busyCount++;
     }
 
-    else if (decodedstat.messageError == 1) {
-        std::cout << "RT" << static_cast<int>(command.rtAddress) << "->BC" << " : MESSAGE ERROR";
-        if (decodedstat.busy == 1) {
-            std::cout << " | BUSY " << endl;
-        }
-        else
-            std::cout << std::endl;
+    if (decodedstat.messageError == 1) {
+        RTs[TerminalAddress].meCount++;
     }
-
-    else {
-        std::cout << "RT" << static_cast<int>(command.rtAddress) << "->BC" << " : OK" << endl;
-    }
+    RTs[TerminalAddress].messageCount++;
+    
+    RTs[TerminalAddress].busyPercent = (RTs[TerminalAddress].busyCount / RTs[TerminalAddress].messageCount) * 100.0f;
+    RTs[TerminalAddress].mePercent = (RTs[TerminalAddress].meCount / RTs[TerminalAddress].messageCount) * 100.0f;
 }
 
 void BusMonitor::Run() {
@@ -162,6 +165,7 @@ void BusMonitor::Run() {
             ReceiveData();
             cout << endl;
         }
+        ErrorLog();
         Print();
     }
 }

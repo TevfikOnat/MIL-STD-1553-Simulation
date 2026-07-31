@@ -4,7 +4,7 @@ using namespace std;
 uint16_t CreateStatusWord(uint8_t rtaddress, bool me) {
 
 	std::mt19937 generator{ std::random_device{}() };
-	std::uniform_int_distribution<int> busyroll{ 0 , 100 };
+	std::uniform_int_distribution<int> busyroll{ 1 , 100 };
 
 	bool busy = (busyroll(generator) < 3 ? true : false);
 

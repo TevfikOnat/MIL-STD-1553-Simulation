@@ -7,8 +7,18 @@
 #include "CommandWord.h"
 #include "StatusWord.h"
 #include "Ports.h"
+#include <iomanip>
 
 #pragma comment(lib, "ws2_32.lib")
+
+struct ErrorCount
+{
+	int messageCount = 0;
+	double busyCount = 0;
+	double meCount = 0;
+	double busyPercent = 0;
+	double mePercent = 0;
+};
 
 class BusMonitor {
 public:
@@ -24,6 +34,7 @@ private:
 	void ReceiveCommand();
 	void ReceiveData();
 	void ReceiveStatus();
+	void ErrorLog();
 
 	void Print();
 	void ClearScreen();
@@ -52,12 +63,8 @@ private:
 	uint8_t memorysize = 31;
 
 	ErrorCount RTs[4];
+	int Terminal;
+	int TerminalAddress;
 
 };
 
-struct ErrorCount
-{
-	uint8_t messageCount = 0;
-	uint8_t busyCount = 0;
-	uint8_t meCount = 0;
-};
