@@ -7,6 +7,8 @@
 #include <random>
 #include "ARINCWord.h"
 #include "States.h"
+#include "CommandWord.h"
+#include "StatusWord.h"
 #include "AircraftState.h"
 
 
@@ -26,15 +28,38 @@ private:
 	void UpdateState();
 
 	void SendToDisplay();
+	void SendToRT1();
+	void SendToRT2();
+	void SendToRT3();
+	void SendToRT4();
+
+	void Send1553Commands(uint8_t rtAddress);
+	void Send1553Data(DecodedCommand decodedcmd);
+	void Send1553Message(uint8_t rtAddress,
+		uint8_t subAddress,
+		const int16_t* dataWords,
+		uint8_t wordCount);
+	void Receive1553Data();
+	DecodedStatus ReceiveStatus();
 
 private:
-	SOCKET sock = INVALID_SOCKET;
-	sockaddr_in address{};
-	sockaddr_in destination{};
+	SOCKET sockARINC = INVALID_SOCKET;
+	SOCKET sock1553 = INVALID_SOCKET;
+	sockaddr_in ARINCaddress{};
+	sockaddr_in BUSaddress{};
+	sockaddr_in displayDestination{};
+	sockaddr_in busDestination{};
+	sockaddr_in BUS{};
 	sockaddr_in sender{};
 
 	uint32_t raw;
+	uint16_t data;
 	ARINCWord word;
 
 	AircraftState aircraftState;
+	DecodedCommand decodedcmd;
+
+	std::mt19937 generator{ std::random_device{}() };
+	std::uniform_int_distribution<int> addressroll{ 1, 1000 };
+
 };

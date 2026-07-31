@@ -1,7 +1,12 @@
 #include "StatusWord.h"
 using namespace std;
 
-uint16_t CreateStatusWord(uint8_t rtaddress, bool me, bool busy) {
+uint16_t CreateStatusWord(uint8_t rtaddress, bool me) {
+
+	std::mt19937 generator{ std::random_device{}() };
+	std::uniform_int_distribution<int> busyroll{ 0 , 100 };
+
+	bool busy = (busyroll(generator) < 3 ? true : false);
 
 	uint16_t status=0;
 	status |= (rtaddress << 11);

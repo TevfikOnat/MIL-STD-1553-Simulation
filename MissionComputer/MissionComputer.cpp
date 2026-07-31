@@ -1,5 +1,7 @@
 #include "MissionComputer.h"
 #include "Ports.h"
+#include "CommandWord.h"
+#include "StatusWord.h"
 #include <iostream>
 
 MissionComputer::MissionComputer() {
@@ -21,39 +23,59 @@ bool MissionComputer::InitializeSocket() {
 		return false;
 	}
 
-	sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+	sockARINC = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+	sock1553 = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 
-	if (sock == INVALID_SOCKET)
+	if (sockARINC == INVALID_SOCKET)
 	{
-		std::cout << "Invalid Socket" << std::endl;
+		std::cout << "429 Invalid Socket" << std::endl;
+		return false;
+	}
+	if (sock1553 == INVALID_SOCKET)
+	{
+		std::cout << "1553 Invalid Socket" << std::endl;
 		return false;
 	}
 
-	address.sin_family = AF_INET;
-	address.sin_port = htons(Ports::MissionComputer);
-	address.sin_addr.s_addr = INADDR_ANY;
+	ARINCaddress.sin_family = AF_INET;
+	ARINCaddress.sin_port = htons(Ports::MissionComputer);
+	ARINCaddress.sin_addr.s_addr = INADDR_ANY;
 
-	destination.sin_family = AF_INET;
-	destination.sin_port = htons(Ports::Display);
-	destination.sin_addr.s_addr = INADDR_ANY;
-	InetPton(AF_INET, "127.0.0.1", &destination.sin_addr);
+	BUSaddress.sin_family = AF_INET;
+	BUSaddress.sin_port = htons(Ports::BusController);
+	BUSaddress.sin_addr.s_addr = INADDR_ANY;
+
+	displayDestination.sin_family = AF_INET;
+	displayDestination.sin_port = htons(Ports::Display);
+	displayDestination.sin_addr.s_addr = INADDR_ANY;
+	InetPton(AF_INET, "127.0.0.1", &displayDestination.sin_addr);
+
+	busDestination.sin_family = AF_INET;
+	busDestination.sin_port = htons(Ports::BUS);
+	busDestination.sin_addr.s_addr = INADDR_ANY;
+	InetPton(AF_INET, "127.0.0.1", &busDestination.sin_addr);
 
 
-	if (bind(sock, reinterpret_cast<sockaddr*>(&address), sizeof(address)) == SOCKET_ERROR) {
-		std::cout << "Bind failed: " << WSAGetLastError() << std::endl;
+	if (bind(sockARINC, reinterpret_cast<sockaddr*>(&ARINCaddress), sizeof(ARINCaddress)) == SOCKET_ERROR) {
+		std::cout << "ARINC Bind failed: " << WSAGetLastError() << std::endl;
+		return false;
+	}
+	if (bind(sock1553, reinterpret_cast<sockaddr*>(&BUSaddress), sizeof(BUSaddress)) == SOCKET_ERROR) {
+		std::cout << "BUS Bind failed: " << WSAGetLastError() << std::endl;
 		return false;
 	}
 	return true;
 }
 
 void MissionComputer::CloseSocket() {
-	closesocket(sock);
+	closesocket(sockARINC);
+	closesocket(sock1553);
 	WSACleanup();
 }
 
 void MissionComputer::ReceiveARINCWord() {
 	int senderSize = sizeof(sender);
-	int bytesReceived = recvfrom(sock, reinterpret_cast<char*>(&raw), sizeof(raw), 0,
+	int bytesReceived = recvfrom(sockARINC, reinterpret_cast<char*>(&raw), sizeof(raw), 0,
 		reinterpret_cast<sockaddr*>(&sender), &senderSize);
 	if (bytesReceived == SOCKET_ERROR) {
 		std::cout << "Receive failed: " << WSAGetLastError() << std::endl;
@@ -138,12 +160,99 @@ void MissionComputer::UpdateState() {
 
 
 void MissionComputer::SendToDisplay() {
-	int wordSent = sendto(sock, reinterpret_cast<char*>(&aircraftState), sizeof(aircraftState), 0,
-		reinterpret_cast<sockaddr*>(&destination),
-		sizeof(destination));
+	int wordSent = sendto(sockARINC, reinterpret_cast<char*>(&aircraftState), sizeof(aircraftState), 0,
+		reinterpret_cast<sockaddr*>(&displayDestination),
+		sizeof(displayDestination));
 	if (wordSent == SOCKET_ERROR) {
 		std::cout << "sendto failed: " << WSAGetLastError() << std::endl;
 	}
+}
+
+
+void MissionComputer::Send1553Message(uint8_t rtAddress,
+									uint8_t subAddress,
+									const int16_t* dataWords,
+									uint8_t wordCount)
+{
+
+	subAddress = (addressroll(generator) < 15 ? 30 : subAddress);
+	
+	uint16_t cmd = CreateCommandWord(rtAddress, 0, subAddress, wordCount);
+
+	sendto(sock1553, reinterpret_cast<char*>(&cmd), sizeof(cmd), 0,
+		reinterpret_cast<sockaddr*>(&busDestination),
+		sizeof(busDestination));
+
+	for (int i = 0; i < wordCount; i++)
+	{
+		sendto(sock1553, reinterpret_cast<const char*>(&dataWords[i]), sizeof(dataWords[i]), 0,
+			reinterpret_cast<sockaddr*>(&busDestination),
+			sizeof(busDestination));
+	}
+}
+
+void MissionComputer::SendToRT1() {
+	int16_t dataWords[]{
+	aircraftState.heading,
+	aircraftState.roll,
+	aircraftState.pitch,
+	aircraftState.baroAltitude,
+	aircraftState.radioAltitude,
+	};
+	Send1553Message(1, 0, dataWords, 5);
+}
+
+void MissionComputer::SendToRT2() {
+	int16_t dataWords[]{
+	aircraftState.latitude,
+	aircraftState.longitude,
+	aircraftState.groundSpeed,
+	aircraftState.heading
+	};
+	Send1553Message(2, 0, dataWords, 4);
+}
+
+void MissionComputer::SendToRT3() {
+	int16_t dataWords[]{
+	aircraftState.heading,
+	aircraftState.roll,
+	aircraftState.pitch,
+	aircraftState.airspeed,
+	aircraftState.baroAltitude,
+	aircraftState.radioAltitude
+	};
+	Send1553Message(3, 0, dataWords, 6);
+}
+
+
+void MissionComputer::SendToRT4() {
+	int16_t dataWords[]{
+	aircraftState.latitude,
+	aircraftState.longitude,
+	aircraftState.groundSpeed,
+	aircraftState.heading,
+	};
+	Send1553Message(4, 0, dataWords, 4);
+}
+
+
+DecodedStatus MissionComputer::ReceiveStatus() {
+	int busDestinationSize = sizeof(busDestination);
+	uint16_t StatusWord;
+	int StatusReceived = recvfrom(sock1553, reinterpret_cast<char*>(&StatusWord), sizeof(StatusWord), 0,
+		reinterpret_cast<sockaddr*>(&busDestination), &busDestinationSize);
+
+	if (StatusReceived == SOCKET_ERROR) {
+		cout << "Receive failed: " << WSAGetLastError() << endl;
+	}
+
+	DecodedStatus decodedstat = DecodeStatus(StatusWord);
+
+	if (decodedstat.messageError == 1 || decodedstat.busy == 1) {
+		cout << "RT reported an error" << endl;
+	}
+
+	return decodedstat; //void olsa da olurmuş
 }
 
 void MissionComputer::Run() {
@@ -155,5 +264,14 @@ void MissionComputer::Run() {
 
 		UpdateState();
 		SendToDisplay();
+		SendToRT1();
+		Delay(50);
+		SendToRT2();
+		Delay(50);
+		SendToRT3();
+		Delay(50);
+		SendToRT4();
+		Delay(50);
+				
 	}
 }

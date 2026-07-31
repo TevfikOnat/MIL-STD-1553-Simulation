@@ -47,8 +47,12 @@ void BusMonitor::ReceiveCommand() {
         cout << "Error occured receiving CommandWord" << endl;
     }
 
-    command = DecodeCMD(CommandWord);
+    
+    commandSent++;
+    wordsSent++;
 
+    command = DecodeCMD(CommandWord);
+    /*
     cout << "COMMAND " << "RT" << static_cast<int>(command.rtAddress);
     if (command.transmit == 0) {
         cout << " RECEIVE" << endl;
@@ -56,7 +60,7 @@ void BusMonitor::ReceiveCommand() {
     else {
         cout << " TRANSMIT" << endl;
     }
-    cout << "WORD COUNT: " << static_cast<int>(command.wordCount) << endl;
+    cout << "WORD COUNT: " << static_cast<int>(command.wordCount) << endl;*/
 }
 
 void BusMonitor::ReceiveData() {
@@ -66,12 +70,14 @@ void BusMonitor::ReceiveData() {
     for (int i = 0;i < command.wordCount;i++) {
         DataReceived = recvfrom(sock, reinterpret_cast<char*>(&DataWord), sizeof(DataWord), 0,
             reinterpret_cast<sockaddr*>(&sender), &senderSize);
-
+        
         if (DataReceived == SOCKET_ERROR) {
-            cout << "DATA RECEIVE FAILED: " << WSAGetLastError() << endl;
+            //cout << "DATA RECEIVE FAILED: " << WSAGetLastError() << endl;
         }
         else {
-            cout << "DATA " << i + 1 << ": " << DataWord << endl;
+            //cout << "DATA " << i + 1 << ": " << DataWord << endl;
+            wordsSent++;
+            dataSent++;
         }
     }
 }
@@ -82,16 +88,64 @@ void BusMonitor::ReceiveStatus() {
         reinterpret_cast<sockaddr*>(&sender), &senderSize);
 
     if (StatusReceived == SOCKET_ERROR) {
-        cout << "STATUS RECEIVE FAILED " << endl;
-    }
-
-    DecodedStatus decodedstat = DecodeStatus(StatusWord);
-
-    if (decodedstat.messageError == 1 || decodedstat.busy == 1) {
-        cout << (decodedstat.messageError == 1 ? "STATUS: MESSAGE ERROR" : "STATUS: RT BUSY" ) << endl;
+        //cout << "STATUS RECEIVE FAILED " << endl;
     }
     else {
-        cout << "STATUS: OK" << endl;
+        decodedstat = DecodeStatus(StatusWord);
+        statusSent++;
+        wordsSent++;/*
+            if (decodedstat.messageError == 1 || decodedstat.busy == 1) {
+                cout << (decodedstat.messageError == 1 ? "STATUS: MESSAGE ERROR" : "STATUS: RT BUSY") << endl;
+            }
+            else {
+                cout << "STATUS: OK" << endl;
+            }*/
+    }
+}
+
+void BusMonitor::ClearScreen() {
+    HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+
+    CONSOLE_SCREEN_BUFFER_INFO csbi;
+    GetConsoleScreenBufferInfo(hConsole, &csbi);
+
+    DWORD consoleSize = csbi.dwSize.X * csbi.dwSize.Y;
+    DWORD written;
+
+    FillConsoleOutputCharacter(hConsole, ' ', consoleSize, { 0, 0 }, &written);
+    SetConsoleCursorPosition(hConsole, { 0, 0 });
+}
+
+void BusMonitor::Print() {
+    ClearScreen();
+    std::cout << "----------BUS MONITOR----------" << std::endl;
+    std::cout << "Words Sent: " << wordsSent << std::endl;
+    std::cout << "Command Words: " << commandSent << std::endl;
+    std::cout << "Data Words: " << dataSent << std::endl;
+    std::cout << "Status Words: " << statusSent << std::endl;
+
+    std::cout << "BC->RT" << static_cast<int>(command.rtAddress) << " : Command" << endl;
+
+    if (decodedstat.busy == 1) {
+        std::cout << "RT" << static_cast<int>(command.rtAddress) << "->BC" << " : BUSY";
+        if (decodedstat.messageError == 1) {
+            std::cout << " | MESSAGE ERROR " << endl;
+        }
+        else
+            std::cout << std::endl;
+    }
+
+    else if (decodedstat.messageError == 1) {
+        std::cout << "RT" << static_cast<int>(command.rtAddress) << "->BC" << " : MESSAGE ERROR";
+        if (decodedstat.busy == 1) {
+            std::cout << " | BUSY " << endl;
+        }
+        else
+            std::cout << std::endl;
+    }
+
+    else {
+        std::cout << "RT" << static_cast<int>(command.rtAddress) << "->BC" << " : OK" << endl;
     }
 }
 
@@ -108,5 +162,6 @@ void BusMonitor::Run() {
             ReceiveData();
             cout << endl;
         }
+        Print();
     }
 }

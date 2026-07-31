@@ -41,11 +41,11 @@ private:
 
 	DecodedCommand command;
 
-	array<uint16_t, 32> memory{};
+	array<int16_t, 32> memory{};
 	uint8_t memAddress = 0;
 
 	uint16_t CommandWord;
-	uint16_t DataWord;
+	int16_t DataWord;
 	uint16_t statusWord;
 	
 	bool messageerror = FALSE;

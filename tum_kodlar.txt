@@ -1,0 +1,3206 @@
+﻿#include "ADC.h"
+#include "Ports.h"
+#include <iostream>
+
+ADC::ADC() {
+	if (!InitializeSocket())
+	{
+		throw std::runtime_error("Socket initialization failed");
+	}
+}
+
+ADC::~ADC() {
+	CloseSocket();
+}
+
+bool ADC::InitializeSocket() {
+	WSADATA wsaData;
+
+	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+		std::cout << "WSAStartup failed" << std::endl;
+		return false;
+	}
+
+	sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+
+	if (sock == INVALID_SOCKET)
+	{
+		std::cout << "Invalid Socket" << std::endl;
+		return false;
+	}
+
+	address.sin_family = AF_INET;
+	address.sin_port = htons(Ports::ADC);
+	address.sin_addr.s_addr = INADDR_ANY;
+
+	destination.sin_family = AF_INET;
+	destination.sin_port = htons(Ports::MissionComputer);
+	destination.sin_addr.s_addr = INADDR_ANY;
+	InetPton(AF_INET, "127.0.0.1", &destination.sin_addr);
+
+
+	if (bind(sock, reinterpret_cast<sockaddr*>(&address), sizeof(address)) == SOCKET_ERROR) {
+		std::cout << "Bind failed: " << WSAGetLastError() << std::endl;
+		return false;
+	}
+	return true;
+}
+
+void ADC::CloseSocket() {
+	closesocket(sock);
+	WSACleanup();
+}
+
+void ADC::UpdateAirspeed() {
+	adcState.airspeed += airspeedDistribution(generator);
+	adcWord.label = Label::Airspeed;
+	adcWord.data = adcState.airspeed;
+	adcWord.ssm = SSM::FunctionalTest;
+}
+
+void ADC::UpdateBaroAltitude() {
+	adcState.baroAltitude += baroaltitudeDistribution(generator);
+	adcWord.label = Label::BaroAltitude;
+	adcWord.data = adcState.baroAltitude;
+	adcWord.ssm = SSM::NormalOperation;
+
+
+}
+
+void ADC::SendARINCWord(uint32_t raw) {
+	int sendResult = sendto(sock, reinterpret_cast<const char*>(&raw), sizeof(raw), 0,
+		reinterpret_cast<sockaddr*>(&destination), sizeof(destination));
+	if (sendResult == SOCKET_ERROR) {
+		std::cout << "Send failed: " << WSAGetLastError() << std::endl;
+	}
+}
+
+void ADC::Run() {
+	while (true) {
+		UpdateAirspeed();
+		SendARINCWord(CreateARINCWord(adcWord));
+		Delay(200);
+		UpdateBaroAltitude();
+		SendARINCWord(CreateARINCWord(adcWord));
+		Delay(200);
+	}
+}
+#pragma once
+#pragma comment(lib, "ws2_32.lib")
+
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <cstdint>
+#include <random>
+#include "ARINCWord.h"
+#include "States.h"
+
+class ADC {
+public:
+	ADC();
+	~ADC();
+
+	void Run();
+
+private:
+	bool InitializeSocket();
+	void CloseSocket();
+	void SendARINCWord(uint32_t raw);
+
+
+	void UpdateBaroAltitude();
+	void UpdateAirspeed();
+
+
+
+private:
+	SOCKET sock;
+	sockaddr_in address{};
+	sockaddr_in destination{};
+
+	ADCState adcState;
+
+	ARINCWord adcWord;
+
+	std::mt19937 generator{ std::random_device{}() };
+
+	std::uniform_int_distribution<int> baroaltitudeDistribution{ -20, 20 };
+	std::uniform_int_distribution<int> airspeedDistribution{ -50, 50 };
+
+
+};
+//Air Data Computer
+#include <iostream>
+#include "ADC.h"
+
+int main() {
+
+	ADC adc;
+	adc.Run();
+	return 0;
+
+}
+#include "Display.h"
+#include "Ports.h"
+#include <iostream>
+
+Display::Display() {
+	if (!InitializeSocket())
+	{
+		throw std::runtime_error("Socket initialization failed");
+	}
+}
+
+Display::~Display() {
+	CloseSocket();
+}
+
+bool Display::InitializeSocket() {
+    WSADATA wsaData;
+
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+        std::cout << "WSAStartup failed" << std::endl;
+        return false;
+    }
+
+    sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+
+    if (sock == INVALID_SOCKET)
+    {
+        std::cout << "Invalid Socket" << std::endl;
+        return false;
+    }
+
+    address.sin_family = AF_INET;
+    address.sin_port = htons(Ports::Display);
+    address.sin_addr.s_addr = INADDR_ANY;
+
+    if (bind(sock, reinterpret_cast<sockaddr*>(&address), sizeof(address)) == SOCKET_ERROR) {
+        std::cout << "Bind failed: " << WSAGetLastError() << std::endl;
+        return false;
+    }
+    return true;
+}
+
+void Display::CloseSocket() {
+	closesocket(sock);
+	WSACleanup();
+}  
+
+void Display::ReceiveState() {
+	int senderSize = sizeof(sender);
+	int bytesReceived = recvfrom(sock, reinterpret_cast<char*>(&aircraftstate), sizeof(aircraftstate), 0,
+		reinterpret_cast<sockaddr*>(&sender), &senderSize);
+	if (bytesReceived == SOCKET_ERROR) {
+		std::cout << "Receive failed: " << WSAGetLastError() << std::endl;
+	}
+}
+
+void Display::SSMCheck(int32_t value, SSM ssm) {
+
+	switch (ssm) {
+	case SSM::NormalOperation:
+		std::cout << value << std::endl;
+		break;
+	case SSM::FunctionalTest:
+		std::cout << "TEST" << std::endl;
+		break;
+	case SSM::FailureWarning:
+		std::cout << "FAIL" << std::endl;
+		break;
+	case SSM::NoComputedData:
+		std::cout << "NCD" << std::endl;
+		break;
+	}
+}
+
+void Display::Print() {
+
+	HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+
+	CONSOLE_SCREEN_BUFFER_INFO csbi;
+	GetConsoleScreenBufferInfo(hConsole, &csbi);
+
+	DWORD consoleSize = csbi.dwSize.X * csbi.dwSize.Y;
+	DWORD written;
+
+	FillConsoleOutputCharacter(hConsole, ' ', consoleSize, { 0, 0 }, &written);
+	SetConsoleCursorPosition(hConsole, { 0, 0 });
+
+	std::cout << "**GPS DATA**" << std::endl;
+	std::cout << "Altitude: ";
+	SSMCheck(aircraftstate.gpsAltitude, aircraftstate.gpsAltitudeSSM);
+	std::cout << "Ground Speed: ";
+	SSMCheck(aircraftstate.groundSpeed, aircraftstate.groundSpeedSSM);
+	std::cout << "Latitude: ";
+	SSMCheck(aircraftstate.latitude, aircraftstate.latitudeSSM);
+	std::cout << "Longitude: ";
+	SSMCheck(aircraftstate.longitude, aircraftstate.longitudeSSM);
+
+	std::cout << "-------------------------" << std::endl;
+
+	std::cout << "**ADC DATA**" << std::endl;
+	std::cout << "Baro Altitude: ";
+	SSMCheck(aircraftstate.baroAltitude, aircraftstate.baroAltitudeSSM);
+	std::cout << "Airspeed: ";
+	SSMCheck(aircraftstate.airspeed, aircraftstate.airspeedSSM);
+
+
+	std::cout << "-------------------------" << std::endl;
+
+	std::cout << "**IRS DATA**" << std::endl;
+	std::cout << "Heading: ";
+	SSMCheck(aircraftstate.heading, aircraftstate.headingSSM);
+	std::cout << "Roll: ";
+	SSMCheck(aircraftstate.roll, aircraftstate.rollSSM);
+	std::cout << "Pitch: ";
+	SSMCheck(aircraftstate.pitch, aircraftstate.pitchSSM);
+
+	std::cout << "-------------------------" << std::endl;
+
+	std::cout << "**RADIO DATA**" << std::endl;
+	std::cout << "Radio Altitude: ";
+	SSMCheck(aircraftstate.radioAltitude, aircraftstate.radioAltitudeSSM);
+
+
+}
+
+void Display::Run() {
+	while (true) {
+		ReceiveState();
+		Print();
+	}
+}
+#pragma once
+
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include "ARINCWord.h"
+#include "States.h"
+#include "AircraftState.h"
+
+#pragma comment(lib, "ws2_32.lib")
+
+class Display {
+public:
+	Display();
+	~Display();
+
+	void Run();
+
+private:
+	bool InitializeSocket();
+	void CloseSocket();
+
+	void ReceiveState();
+	void Update();
+	void SSMCheck(int32_t value, SSM ssm);
+	void Print();
+
+
+private:
+	SOCKET sock = INVALID_SOCKET;
+	sockaddr_in address{};
+	sockaddr_in sender{};
+
+	uint32_t raw;
+	AircraftState aircraftstate;
+	ARINCWord word;
+
+	GPSState gpsState;
+	ADCState adcState;
+	IRSState irsState;
+	RadioState radioState;
+
+
+};
+#include <iostream>
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include "ARINCWord.h"
+#include "States.h"
+#include "Display.h"
+
+#pragma comment(lib, "ws2_32.lib")
+
+int main() {
+	
+	Display display;
+
+	display.Run();
+
+}
+#include "GPS.h"
+#include "Ports.h"
+#include <iostream>
+
+
+
+GPS::GPS() {
+	if (!InitializeSocket())
+	{
+		throw std::runtime_error("Socket initialization failed");
+	}
+}
+
+GPS::~GPS() {
+	CloseSocket();
+}
+
+bool GPS::InitializeSocket() {
+	WSADATA wsaData;
+
+	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+		std::cout << "WSAStartup failed" << std::endl;
+		return false;
+	}
+
+	sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+	
+	if (sock == INVALID_SOCKET)
+	{
+		std::cout << "Invalid Socket" << std::endl;
+		return false;
+	}
+
+	address.sin_family = AF_INET;
+	address.sin_port = htons(Ports::GPS);
+	address.sin_addr.s_addr = INADDR_ANY;
+
+	destination.sin_family = AF_INET;
+	destination.sin_port = htons(Ports::MissionComputer);
+	destination.sin_addr.s_addr = INADDR_ANY;
+	InetPton(AF_INET, "127.0.0.1", &destination.sin_addr);
+	
+
+	if (bind(sock, reinterpret_cast<sockaddr*>(&address), sizeof(address)) == SOCKET_ERROR) {
+		std::cout << "Bind failed: " << WSAGetLastError() << std::endl;
+		return false;
+	}
+	return true;
+}
+
+void GPS::CloseSocket() {
+	closesocket(sock);
+	WSACleanup();
+}
+
+void GPS::UpdateGPSAltitude() {
+	gpsState.altitude += altitudeDistribution(generator);
+	gpsWord.label = Label::GPSAltitude;
+	gpsWord.data = gpsState.altitude;
+}
+
+void GPS::UpdateGroundSpeed() {
+	gpsState.groundSpeed += groundSpeedDistribution(generator);
+	gpsWord.label = Label::groundSpeed;
+	gpsWord.data = gpsState.groundSpeed;
+}
+
+void GPS::UpdateLatitude() {
+	gpsState.latitude += latitudeDistribution(generator);
+	gpsWord.label = Label::Latitude;
+	gpsWord.data = gpsState.latitude;
+}
+
+void GPS::UpdateLongitude() {
+	gpsState.longitude += longitudeDistribution(generator);
+	gpsWord.label = Label::Longitude;
+	gpsWord.data = gpsState.longitude;
+}	
+
+void GPS::SendARINCWord(uint32_t raw) {
+	int wordSent = sendto(sock, reinterpret_cast<char*>(&raw), sizeof(raw), 0,
+		reinterpret_cast<sockaddr*>(&destination),
+		sizeof(destination));
+	if (wordSent == SOCKET_ERROR) {
+		std::cout << "sendto failed: " << WSAGetLastError() << std::endl;
+	}
+}
+
+void GPS::Run() {
+
+	while (true) {
+		UpdateGPSAltitude();
+		SendARINCWord(CreateARINCWord(gpsWord));
+		Delay(200);
+		UpdateGroundSpeed();
+		SendARINCWord(CreateARINCWord(gpsWord));
+		Delay(200);
+		UpdateLatitude();
+		SendARINCWord(CreateARINCWord(gpsWord));
+		Delay(200);
+		UpdateLongitude();
+		SendARINCWord(CreateARINCWord(gpsWord));
+		Delay(200);
+	}
+
+}
+#pragma once
+#pragma comment(lib, "ws2_32.lib")
+
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <cstdint>
+#include <random>
+#include "ARINCWord.h"
+#include "States.h"
+
+class GPS {
+public:
+	GPS();
+	~GPS();
+
+	void Run();
+
+private:
+	bool InitializeSocket();
+	void CloseSocket();
+	void SendARINCWord(uint32_t raw);
+
+	void UpdateGPSAltitude();
+	void UpdateGroundSpeed();
+	void UpdateLatitude();
+	void UpdateLongitude();
+
+
+private:
+	SOCKET sock;
+	sockaddr_in address{};
+	sockaddr_in destination{};
+
+	GPSState gpsState;
+
+	ARINCWord gpsWord;
+
+	std::mt19937 generator{ std::random_device{}() };
+
+	std::uniform_int_distribution<int> altitudeDistribution{-20, 20};
+	std::uniform_int_distribution<int> groundSpeedDistribution{-50, 50};
+	std::uniform_int_distribution<int> latitudeDistribution{-3, 3};
+	std::uniform_int_distribution<int> longitudeDistribution{-2, 2};
+
+
+};
+#include <iostream>
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include "ARINCWord.h"
+#include "GPS.h"
+
+#pragma comment(lib, "ws2_32.lib")
+
+int main() {
+    
+	GPS gps;
+
+	gps.Run();
+	return 0;		
+
+}
+#include "IRS.h"
+#include "Ports.h"
+#include <iostream>
+
+IRS::IRS() {
+	if (!InitializeSocket()) {
+		std::cerr << "Failed to initialize socket." << std::endl;
+	}
+}
+
+IRS::~IRS() {
+	CloseSocket();
+}
+
+bool IRS::InitializeSocket() {
+	WSADATA wsaData;
+
+	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+		std::cout << "WSAStartup failed" << std::endl;
+		return false;
+	}
+
+	sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+
+	if (sock == INVALID_SOCKET)
+	{
+		std::cout << "Invalid Socket" << std::endl;
+		return false;
+	}
+
+	address.sin_family = AF_INET;
+	address.sin_port = htons(Ports::IRS);
+	address.sin_addr.s_addr = INADDR_ANY;
+
+	destination.sin_family = AF_INET;
+	destination.sin_port = htons(Ports::MissionComputer);
+	destination.sin_addr.s_addr = INADDR_ANY;
+	InetPton(AF_INET, "127.0.0.1", &destination.sin_addr);
+
+
+	if (bind(sock, reinterpret_cast<sockaddr*>(&address), sizeof(address)) == SOCKET_ERROR) {
+		std::cout << "Bind failed: " << WSAGetLastError() << std::endl;
+		return false;
+	}
+	return true;
+}
+
+void IRS::CloseSocket() {
+	closesocket(sock);
+	WSACleanup();
+}
+
+void IRS::UpdateHeading() {
+	irsState.heading += headingDistribution(generator);
+	irsWord.label = Label::Heading;
+	irsWord.data = irsState.heading;
+}
+
+void IRS::UpdateRoll() {
+	irsState.roll += rollDistribution(generator);
+	irsWord.label = Label::Roll;
+	irsWord.data = irsState.roll;
+}
+
+void IRS::UpdatePitch() {
+	irsState.pitch += pitchDistribution(generator);
+	irsWord.label = Label::Pitch;
+	irsWord.data = irsState.pitch;
+}
+
+
+void IRS::SendARINCWord(uint32_t raw) {
+	int wordSent = sendto(sock, reinterpret_cast<char*>(&raw), sizeof(raw), 0,
+		reinterpret_cast<sockaddr*>(&destination),
+		sizeof(destination));
+	if (wordSent == SOCKET_ERROR) {
+		std::cout << "sendto failed: " << WSAGetLastError() << std::endl;
+	}
+}
+
+void IRS::Run() {
+	while (true) {
+		UpdateHeading();
+		SendARINCWord(CreateARINCWord(irsWord));
+		Delay(200);
+		UpdateRoll();
+		SendARINCWord(CreateARINCWord(irsWord));
+		Delay(200);
+		UpdatePitch();
+		SendARINCWord(CreateARINCWord(irsWord));
+		Delay(200);
+	}
+}
+#pragma once
+#pragma comment(lib, "ws2_32.lib")
+
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <cstdint>
+#include <random>
+#include "ARINCWord.h"
+#include "States.h"
+
+
+class IRS {
+public:
+	IRS();
+	~IRS();
+
+	void Run();
+
+private:
+	bool InitializeSocket();
+	void CloseSocket();
+	
+	void SendARINCWord(uint32_t raw);
+
+	void UpdateHeading();
+	void UpdateRoll();
+	void UpdatePitch();
+
+private:
+	SOCKET sock;
+	sockaddr_in address{};
+	sockaddr_in destination{};
+
+	IRSState irsState;
+
+	ARINCWord irsWord;
+
+	std::mt19937 generator{ std::random_device{}() };
+
+	std::uniform_int_distribution<int> headingDistribution{ 0, 1 };
+	std::uniform_int_distribution<int> rollDistribution{ -1, 1 };
+	std::uniform_int_distribution<int> pitchDistribution{ -5, 5 };		 
+};
+//Inertial Refernce System
+#include "IRS.h"
+
+int main() {
+	IRS irs;
+	irs.Run();
+	return 0;
+}
+#include "Radio.h"
+
+int main() {
+	Radio radio;
+
+	radio.Run();
+	return 0;
+}
+#include "Radio.h"
+#include "Ports.h"
+#include <iostream>
+#include <chrono>
+#include <thread>
+
+Radio::Radio() {
+	if (!InitializeSocket())
+	{
+		throw std::runtime_error("Socket initialization failed");
+	}
+}
+
+Radio::~Radio() {
+	CloseSocket();
+}
+
+bool Radio::InitializeSocket() {
+	WSADATA wsaData;
+
+	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+		std::cout << "WSAStartup failed" << std::endl;
+		return false;
+	}
+
+	sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+
+	if (sock == INVALID_SOCKET)
+	{
+		std::cout << "Invalid Socket" << std::endl;
+		return false;
+	}
+
+	address.sin_family = AF_INET;
+	address.sin_port = htons(Ports::Radio);
+	address.sin_addr.s_addr = INADDR_ANY;
+
+	destination.sin_family = AF_INET;
+	destination.sin_port = htons(Ports::MissionComputer);
+	destination.sin_addr.s_addr = INADDR_ANY;
+	InetPton(AF_INET, "127.0.0.1", &destination.sin_addr);
+
+
+	if (bind(sock, reinterpret_cast<sockaddr*>(&address), sizeof(address)) == SOCKET_ERROR) {
+		std::cout << "Bind failed: " << WSAGetLastError() << std::endl;
+		return false;
+	}
+	return true;
+}
+
+void Radio::CloseSocket() {
+	closesocket(sock);
+	WSACleanup();
+}
+
+void Radio::UpdateAltitude() {
+	radioState.radioAltitude += altitudeDistribution(generator);
+	radioWord.label = Label::RadioAltitude;
+	radioWord.data = radioState.radioAltitude;
+}
+
+void Radio::SendARINCWord(uint32_t raw) {
+	int wordSent = sendto(sock, reinterpret_cast<char*>(&raw), sizeof(raw), 0,
+		reinterpret_cast<sockaddr*>(&destination),
+		sizeof(destination));
+	if (wordSent == SOCKET_ERROR) {
+		std::cout << "sendto failed: " << WSAGetLastError() << std::endl;
+	}
+}
+
+void Radio::Run() {
+	while (true) {
+		UpdateAltitude();
+		SendARINCWord(CreateARINCWord(radioWord));
+		Delay(200);
+	}
+}
+#pragma once
+#pragma comment(lib, "ws2_32.lib")
+
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <cstdint>
+#include <random>
+#include "ARINCWord.h"
+#include "States.h"
+
+class Radio {
+public:
+	Radio();
+	~Radio();
+
+	void Run();
+
+private:
+	bool InitializeSocket();
+	void CloseSocket();
+
+	void SendARINCWord(uint32_t raw);
+
+	void UpdateAltitude();
+
+private:
+	SOCKET sock;
+	sockaddr_in address{};
+	sockaddr_in destination{};
+
+	RadioState radioState;
+
+	ARINCWord radioWord;
+
+	std::mt19937 generator{ std::random_device{}() };
+
+	std::uniform_int_distribution<int> altitudeDistribution{ -100, 100 };
+
+};
+#pragma once
+#include <cstdint>
+#include "ARINCWord.h"
+struct AircraftState
+{
+    // GPS
+    uint32_t latitude = 0;
+    SSM  latitudeSSM = SSM::NormalOperation;
+
+    uint32_t longitude = 0;
+    SSM longitudeSSM = SSM::NormalOperation;
+
+    uint32_t gpsAltitude = 0;
+    SSM gpsAltitudeSSM = SSM::NormalOperation;
+
+    uint32_t groundSpeed = 0;
+    SSM groundSpeedSSM = SSM::NormalOperation;
+
+    // Air Data Computer
+    uint32_t airspeed = 0;
+    SSM airspeedSSM = SSM::NormalOperation;
+
+    uint32_t baroAltitude = 0;
+    SSM baroAltitudeSSM = SSM::NormalOperation;
+
+    // IRS
+    uint32_t heading = 0;
+    SSM headingSSM = SSM::NormalOperation;
+
+    int32_t roll = 0;
+    SSM rollSSM = SSM::NormalOperation;
+
+    int32_t pitch = 0;
+    SSM pitchSSM = SSM::NormalOperation;
+
+    // Radio Altimeter
+    uint32_t radioAltitude = 0;
+    SSM radioAltitudeSSM = SSM::NormalOperation;
+};
+#include "ARINCWord.h"
+#include <chrono>
+#include <thread>
+
+bool CalculateOddParity(uint32_t raw) {
+	uint8_t parityCount = 0;
+	for (int i = 0; i < 31; ++i) {
+		if ((raw >> i) & 1) {
+			++parityCount;
+		}
+	}
+	return (parityCount % 2 == 0);
+}
+
+bool CheckParity(uint32_t raw) {
+	bool calculatedParity = CalculateOddParity(raw & 0x7FFFFFFF);
+	bool receivedParity = (raw >> 31) & 1;
+	return calculatedParity == receivedParity;
+}
+
+uint32_t CreateARINCWord(ARINCWord& word) {
+	int32_t raw = 0;
+	word.ssm = GenerateSSM();
+	raw |= static_cast<uint32_t>(word.label);
+
+	raw |= (static_cast<uint32_t>(word.sdi) & 0x03) << 8;
+
+	raw |= (word.data & 0x7FFFF) << 10;
+
+	raw |= (static_cast<uint32_t>(word.ssm) & 0x03) << 29;
+
+	bool parity = CalculateOddParity(raw);
+	raw |= static_cast<uint32_t>(parity) << 31; 
+	return raw;
+}
+
+ARINCWord DecodeARINCWord(uint32_t rawWord) {
+	ARINCWord word;
+	word.label = static_cast<Label>(rawWord & 0xFF);
+	word.sdi = static_cast<uint8_t>((rawWord >> 8) & 0x03);
+	int32_t data = (rawWord >> 10) & 0x7FFFF;
+
+	if (data & (1 << 18))   // 19 bitin en Ã¼st biti 1 ise
+	{
+		data |= ~0x7FFFF;   // Ã¼st bitleri 1 yap
+	}
+
+	word.data = data;
+	word.ssm = static_cast<SSM>((rawWord >> 29) & 0x03);
+	word.parity = (rawWord >> 31) & 0x01;
+	return word;
+}
+
+void Delay(int milliseconds) {
+	std::this_thread::sleep_for(std::chrono::milliseconds(milliseconds));
+}
+
+SSM GenerateSSM() {
+	std::mt19937 generator{ std::random_device{}() };
+	std::uniform_int_distribution<int> SSMroll{ 1, 100 };
+
+	int roll = SSMroll(generator);
+	if (roll == 1) {
+		return SSM::FailureWarning;
+	}
+	else if (roll == 2) {
+		return SSM::NoComputedData;
+	}
+	else{
+		return SSM::NormalOperation;
+	}
+
+}
+#pragma once
+#include <cstdint>
+#include <random>
+
+enum class Label : uint8_t
+{
+	GPSAltitude = 203,
+	groundSpeed = 14,
+	Latitude = 205,
+	Longitude = 206,
+
+	BaroAltitude = 200,
+	Airspeed = 13,
+
+	Heading = 80,
+	Roll = 21,
+	Pitch = 22,
+
+	RadioAltitude =	201
+};
+
+enum class SSM : uint8_t
+{
+	NormalOperation = 0b00,
+	FunctionalTest = 0b01,
+	NoComputedData = 0b10,
+	FailureWarning = 0b11,
+};
+
+
+struct ARINCWord
+{
+	Label label;
+	uint8_t sdi;
+	int32_t data;
+	SSM ssm = SSM::NormalOperation;
+	bool parity;
+
+};
+
+SSM GenerateSSM();
+void Delay(int milliseconds); 
+uint32_t CreateARINCWord(ARINCWord& word);
+ARINCWord DecodeARINCWord(uint32_t rawWord);
+bool CalculateOddParity(uint32_t raw);
+#include "CommandWord.h"
+using namespace std;
+
+uint16_t CreateCommandWord(uint8_t rtAddress, uint8_t transmit, uint8_t subAddress, uint8_t wordCount) {
+
+    uint16_t cmd = 0;
+    cmd |= (rtAddress << 11);
+    cmd |= (transmit << 10);
+    cmd |= (subAddress << 5);
+    cmd |= wordCount;
+
+    return cmd;
+}
+
+uint16_t EncodeCommandWord() {
+    int rtadd;
+    int tr;
+    int sub;
+    int wordC;
+
+    while (true){
+
+        cout << "RT Address, T/R, Subaddress, Word Count: ";
+
+        cin >> rtadd >> tr >> sub >> wordC;
+
+        if (cin.fail()){
+            cin.clear();
+            cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+            cout << "Please enter only numbers(in intervals)." << endl;
+            continue;
+        }
+
+        if (rtadd < 1 || rtadd > 31){
+            cout << "RT Address must be between 0 and 31." << endl;
+            continue;
+        }
+
+        if (tr != 0 && tr != 1){
+            cout << "T/R must be 0 or 1." << endl;
+            continue;
+        }
+
+        if (sub < 0 || sub > 31){
+            cout << "Subaddress must be between 0 and 31." << endl;
+            continue;
+        }
+
+        if (wordC < 1 || wordC > 32){
+            cout << "Word Count must be between 1 and 32." << endl;
+            continue;
+        }
+        else if (wordC == 32) {
+            wordC = 0;
+        }
+
+        break;
+    }
+
+    return CreateCommandWord(static_cast<uint8_t>(rtadd),
+        static_cast<uint8_t>(tr),
+        static_cast<uint8_t>(sub),
+        static_cast<uint8_t>(wordC));
+
+}
+
+DecodedCommand DecodeCMD(uint16_t cmd)
+{
+
+    DecodedCommand decoded;
+
+    decoded.cmd = cmd;
+    decoded.rtAddress = (cmd >> 11) & 0x1F;
+    decoded.transmit = (cmd >> 10) & 0x01;
+    decoded.subAddress = (cmd >> 5) & 0x1F;
+    decoded.wordCount = cmd & 0x1F;
+	if (decoded.wordCount == 0) {
+		decoded.wordCount = 32;
+	}   
+
+    return decoded;
+}
+#pragma once
+#include <iostream>
+
+uint16_t CreateCommandWord(uint8_t rtAddress, uint8_t transmit, uint8_t subAddress, uint8_t wordCount);
+uint16_t EncodeCommandWord();
+
+struct DecodedCommand
+{
+
+    uint16_t cmd;
+    uint8_t rtAddress;
+    uint8_t transmit;
+    uint8_t subAddress;
+    uint8_t wordCount;
+
+};
+
+DecodedCommand DecodeCMD(uint16_t cmd);
+#pragma once
+#include <iostream>
+#include <array>
+
+using namespace std;
+
+namespace Ports {
+	constexpr uint16_t BusController = 5000;
+
+	constexpr uint16_t BusMonitor = 5001;
+
+	constexpr uint16_t BUS = 5100;
+
+	constexpr array<uint16_t, 5> RemoteTerminals = { 7000,7001,7002,7003,7004 };
+
+
+	constexpr uint16_t MissionComputer = 8000;
+
+	constexpr uint16_t Display = 8010;
+
+	constexpr uint16_t GPS = 8100;
+	constexpr uint16_t ADC = 8101;
+	constexpr uint16_t IRS = 8102;
+	constexpr uint16_t Radio = 8103;
+
+
+
+
+
+
+}
+#pragma once
+#include <cstdint>
+
+struct GPSState
+{
+	uint32_t latitude = 50;
+	uint32_t longitude = 30;
+	uint32_t altitude = 15000;
+	uint32_t groundSpeed = 280;
+
+};
+
+struct ADCState
+{
+	uint32_t airspeed = 300;
+	uint32_t baroAltitude = 15100;
+};
+
+struct IRSState
+{
+	uint32_t heading = 0;
+	int32_t roll = 2;
+	int32_t pitch = 3;
+};
+
+struct RadioState
+{
+	uint32_t radioAltitude = 14900;
+};
+#include "StatusWord.h"
+using namespace std;
+
+uint16_t CreateStatusWord(uint8_t rtaddress, bool me) {
+
+	std::mt19937 generator{ std::random_device{}() };
+	std::uniform_int_distribution<int> busyroll{ 0 , 1 };
+
+	bool busy = static_cast<bool>(busyroll(generator));
+
+	uint16_t status=0;
+	status |= (rtaddress << 11);
+	status |= (me << 10);
+	status |= (busy << 9);
+
+	return status;
+}
+
+DecodedStatus DecodeStatus(uint16_t stat) {
+
+	DecodedStatus status;
+	status.rtaddress = (stat >> 11) & (0x1F);
+	status.messageError = (stat >> 10) & (0x01);
+	status.busy = (stat >> 9) & (0x01);
+
+	return status;
+}
+#pragma once
+#include <iostream>
+#include <random>
+
+
+uint16_t CreateStatusWord(uint8_t rtaddress, bool me);
+
+struct DecodedStatus {
+	
+
+
+	uint8_t rtaddress;
+	bool messageError;	
+	bool busy;
+};
+
+DecodedStatus DecodeStatus(uint16_t stat);
+#include "BUS.h"
+#include "Ports.h"
+#include "CommandWord.h"
+using namespace std;
+
+
+void BUS::InitializeSocket() {
+
+    WSADATA wsaData;
+
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+        cout << "WSAStartup failed" << endl;
+    }
+
+    sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+
+    if (sock == INVALID_SOCKET)
+    {
+        cout << "Invalid Socket" << endl;
+    }
+
+    address.sin_family = AF_INET;
+    address.sin_port = htons(Ports::BUS);
+    address.sin_addr.s_addr = INADDR_ANY;
+
+
+    for (int i = 0;i < Ports::RemoteTerminals.size();i++) {
+        rtSockets[i].sin_family = AF_INET;
+        rtSockets[i].sin_port = htons(Ports::RemoteTerminals[i]);
+        InetPton(AF_INET, "127.0.0.1", &rtSockets[i].sin_addr);
+    }
+
+    buscontroller.sin_family = AF_INET;
+    buscontroller.sin_port = htons(Ports::BusController);
+    InetPton(AF_INET, "127.0.0.1", &buscontroller.sin_addr);
+
+    busmonitor.sin_family = AF_INET;
+    busmonitor.sin_port = htons(Ports::BusMonitor);
+    InetPton(AF_INET, "127.0.0.1", &busmonitor.sin_addr);
+
+	if (bind(sock, reinterpret_cast<sockaddr*>(&address), sizeof(address)) == SOCKET_ERROR) {
+		cout << "Bind failed: " << WSAGetLastError() << endl;
+	}
+}
+
+void BUS::ReceivePacket() {
+    char buffer[256];
+
+    int bytesReceived = recvfrom(sock, buffer, sizeof(buffer), 0,
+        reinterpret_cast<sockaddr*>(&sender),
+        &senderSize);
+
+    if (ntohs(sender.sin_port) == Ports::BusController) {
+        ForwardToRT(reinterpret_cast<const char*>(&buffer), bytesReceived);
+        ForwardToBM(reinterpret_cast<const char*>(&buffer), bytesReceived);
+    }
+    else if (ntohs(sender.sin_port) >= 7000 && ntohs(sender.sin_port) <= 7004) {
+        ForwardToBC(reinterpret_cast<const char*>(&buffer), bytesReceived);
+        ForwardToBM(reinterpret_cast<const char*>(&buffer), bytesReceived);
+
+    }
+}
+
+void BUS::ForwardToBC(const char* buffer, int bytesReceived){        
+    sendto(sock, buffer, bytesReceived, 0,
+        reinterpret_cast<sockaddr*>(&buscontroller),
+        sizeof(buscontroller)); 
+}
+
+void BUS::ForwardToRT(const char* buffer, int bytesReceived) {
+    for (int i = 0; i < Ports::RemoteTerminals.size(); i++) {
+        sendto(sock, buffer, bytesReceived, 0,
+            reinterpret_cast<sockaddr*>(&rtSockets[i]),
+            sizeof(rtSockets[i]));
+    }
+}
+
+void BUS::ForwardToBM(const char* buffer, int bytesReceived) {
+    sendto(sock, buffer, bytesReceived, 0,
+        reinterpret_cast<sockaddr*>(&busmonitor),
+        sizeof(busmonitor));
+}
+
+void BUS::Run() {
+	while (true) {
+		ReceivePacket();
+	}
+}
+
+BUS::BUS() {
+	InitializeSocket();
+}
+
+BUS::~BUS()
+{
+    if (sock != INVALID_SOCKET)
+    {
+        closesocket(sock);
+    }
+
+    WSACleanup();
+}
+#pragma once
+
+#include <iostream>
+#include <winsock2.h>
+#include <ws2tcpip.h>
+
+#pragma comment(lib, "ws2_32.lib")
+
+
+class BUS {
+public:
+	BUS();
+	~BUS();
+
+	void Run();
+
+private:
+	void InitializeSocket();
+
+	void ReceivePacket();
+
+	void ForwardToRT(const char* buffer, int bytesReceived);
+
+	void ForwardToBC(const char* buffer, int bytesReceived);
+
+	void ForwardToBM(const char* buffer, int bytesReceived);
+
+
+private:
+	SOCKET sock = INVALID_SOCKET;
+
+    sockaddr_in address{};
+	sockaddr_in rtSockets[5]{};
+	sockaddr_in buscontroller{};
+	sockaddr_in busmonitor{};
+	sockaddr_in sender{};
+
+	int senderSize = sizeof(sender);
+};
+#include "BUS.h"
+
+using namespace std;
+
+int main() {  
+
+	BUS bus;
+
+	bus.Run();
+
+}
+#include "BusController.h"
+#include "Ports.h"
+
+using namespace std;
+
+void BusController::InitializeSocket() {
+    WSADATA wsaData;
+
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+        cout << "WSAStartup failed" << endl;
+    }
+
+    sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+
+    if (sock == INVALID_SOCKET)
+    {
+        cout << "Invalid Socket" << endl;
+    }
+
+    address.sin_family = AF_INET;
+    address.sin_port = htons(Ports::BusController);
+    address.sin_addr.s_addr = INADDR_ANY;
+
+    destination.sin_family = AF_INET;
+    destination.sin_port = htons(Ports::BUS);
+    destination.sin_addr.s_addr = INADDR_ANY;
+    InetPton(AF_INET, "127.0.0.1", &destination.sin_addr);
+
+    if (bind(sock, reinterpret_cast<sockaddr*>(&address), sizeof(address)) == SOCKET_ERROR) {
+        cout << "Bind failed: " << WSAGetLastError() << endl;
+    }    
+}
+
+void BusController::CloseSocket(SOCKET sock) {
+	closesocket(sock);
+	WSACleanup();
+}
+
+void BusController::SendCommand() {
+    uint16_t cmd = EncodeCommandWord();
+    decodedcmd = DecodeCMD(cmd);
+
+    int CMDSent = sendto(sock, reinterpret_cast<char*>(&cmd), sizeof(cmd), 0,
+        reinterpret_cast<sockaddr*>(&destination),
+        sizeof(destination));
+
+    if (CMDSent == SOCKET_ERROR)
+    {
+        cout << "Send failed: " << WSAGetLastError() << endl;
+    }
+}
+
+void BusController::SendData(DecodedCommand decodedcmd) {
+    for (int i = 0;i < decodedcmd.wordCount;i++) {
+        uint16_t data = 0;
+        cout << "Data to send to the address " << decodedcmd.rtAddress + i << ": ";
+        cin >> data;
+        int DataSent = sendto(sock, reinterpret_cast<char*>(&data), sizeof(data), 0,
+            reinterpret_cast<sockaddr*>(&destination),
+            sizeof(destination));
+    }           
+}
+
+void BusController::ReceiveData() {
+	uint16_t DataWord;
+	int DataReceived;
+
+    for (int i = 0;i < decodedcmd.wordCount;i++) {
+        DataReceived = recvfrom(sock, reinterpret_cast<char*>(&DataWord), sizeof(DataWord), 0,
+            reinterpret_cast<sockaddr*>(&destination), &destinationSize);
+
+        if (DataReceived == SOCKET_ERROR) {
+            cout << "Receive failed: " << WSAGetLastError() << endl;
+        }
+        else {
+            cout << "Received data: " << DataWord << endl;
+        }
+    }
+}
+
+DecodedStatus BusController::ReceiveStatus() {
+	uint16_t StatusWord;
+    int StatusReceived = recvfrom(sock, reinterpret_cast<char*>(&StatusWord), sizeof(StatusWord), 0,
+        reinterpret_cast<sockaddr*>(&destination), &destinationSize);
+
+    if (StatusReceived == SOCKET_ERROR) {
+        cout << "Receive failed: " << WSAGetLastError() << endl;
+    }
+
+    DecodedStatus decodedstat = DecodeStatus(StatusWord);
+
+    if (decodedstat.messageError == 1 || decodedstat.busy == 1) {
+        cout << "RT reported an error" << endl;
+    }
+	
+	return decodedstat;
+}
+
+void BusController::Run() {
+	while (true) {
+        SendCommand();
+        if (decodedcmd.transmit == 0) {
+            SendData(decodedcmd);
+            ReceiveStatus();
+        }
+        else if (decodedcmd.transmit == 1) {
+            ReceiveStatus();
+            ReceiveData();
+        }
+	}    
+}
+
+BusController::BusController() {
+    InitializeSocket();
+}
+
+BusController::~BusController() {
+    CloseSocket(sock);
+}
+
+#pragma once
+
+#include <iostream>
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include "StatusWord.h"
+#include "CommandWord.h"
+
+#pragma comment(lib, "ws2_32.lib")
+
+class BusController {
+public:
+	BusController();
+	~BusController();
+
+	void Run();
+
+private:
+	void InitializeSocket();
+	void CloseSocket(SOCKET sock);
+
+	void SendCommand();
+	void SendData(DecodedCommand decodedcmd);
+
+	void ReceiveData();
+	DecodedStatus ReceiveStatus();
+
+private:
+	SOCKET sock = INVALID_SOCKET;
+	sockaddr_in address{};
+	sockaddr_in destination{};
+	sockaddr_in sender{};
+	int destinationSize = sizeof(destination);
+	int StatusReceived;
+	DecodedCommand decodedcmd;
+};
+#include "BusController.h"
+
+using namespace std;
+
+
+int main() {
+
+	BusController busController;
+
+	busController.Run();
+
+    cin.get();
+    return 0;
+}
+
+#include "BusMonitor.h"
+
+using namespace std;
+
+BusMonitor::BusMonitor() {
+    InitializeSocket();
+}
+
+BusMonitor::~BusMonitor() {
+    CloseSocket(sock);
+}
+
+void BusMonitor::InitializeSocket() {
+    WSADATA wsaData;
+
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+        cout << "WSAStartup failed" << endl;
+    }
+
+    sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+
+    if (sock == INVALID_SOCKET)
+    {
+        cout << "Invalid Socket" << endl;
+    }
+
+    address.sin_family = AF_INET;
+    address.sin_port = htons(Ports::BusMonitor);
+    address.sin_addr.s_addr = INADDR_ANY;
+
+    if (bind(sock, reinterpret_cast<sockaddr*>(&address), sizeof(address)) == SOCKET_ERROR) {
+        cout << "Bind failed: " << WSAGetLastError() << endl;
+    }
+}
+
+void BusMonitor::CloseSocket(SOCKET sock) {
+    closesocket(sock);
+    WSACleanup();
+}
+
+void BusMonitor::ReceiveCommand() {
+    int CMDReceived = recvfrom(sock, reinterpret_cast<char*>(&CommandWord), sizeof(CommandWord), 0,
+        reinterpret_cast<sockaddr*>(&sender),
+        &senderSize);
+
+    if (CMDReceived == SOCKET_ERROR) {
+        cout << "Error occured receiving CommandWord" << endl;
+    }
+
+    
+    commandSent++;
+    wordsSent++;
+
+    command = DecodeCMD(CommandWord);
+    /*
+    cout << "COMMAND " << "RT" << static_cast<int>(command.rtAddress);
+    if (command.transmit == 0) {
+        cout << " RECEIVE" << endl;
+    }
+    else {
+        cout << " TRANSMIT" << endl;
+    }
+    cout << "WORD COUNT: " << static_cast<int>(command.wordCount) << endl;*/
+}
+
+void BusMonitor::ReceiveData() {
+    uint16_t DataWord;
+    int DataReceived;
+
+    for (int i = 0;i < command.wordCount;i++) {
+        DataReceived = recvfrom(sock, reinterpret_cast<char*>(&DataWord), sizeof(DataWord), 0,
+            reinterpret_cast<sockaddr*>(&sender), &senderSize);
+        
+        if (DataReceived == SOCKET_ERROR) {
+            //cout << "DATA RECEIVE FAILED: " << WSAGetLastError() << endl;
+        }
+        else {
+            //cout << "DATA " << i + 1 << ": " << DataWord << endl;
+            wordsSent++;
+            dataSent++;
+        }
+    }
+}
+
+void BusMonitor::ReceiveStatus() {
+    uint16_t StatusWord;
+    int StatusReceived = recvfrom(sock, reinterpret_cast<char*>(&StatusWord), sizeof(StatusWord), 0,
+        reinterpret_cast<sockaddr*>(&sender), &senderSize);
+
+    if (StatusReceived == SOCKET_ERROR) {
+        //cout << "STATUS RECEIVE FAILED " << endl;
+    }
+    else {
+        decodedstat = DecodeStatus(StatusWord);
+        statusSent++;
+        wordsSent++;/*
+            if (decodedstat.messageError == 1 || decodedstat.busy == 1) {
+                cout << (decodedstat.messageError == 1 ? "STATUS: MESSAGE ERROR" : "STATUS: RT BUSY") << endl;
+            }
+            else {
+                cout << "STATUS: OK" << endl;
+            }*/
+    }
+}
+
+void BusMonitor::ClearScreen() {
+    HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+
+    CONSOLE_SCREEN_BUFFER_INFO csbi;
+    GetConsoleScreenBufferInfo(hConsole, &csbi);
+
+    DWORD consoleSize = csbi.dwSize.X * csbi.dwSize.Y;
+    DWORD written;
+
+    FillConsoleOutputCharacter(hConsole, ' ', consoleSize, { 0, 0 }, &written);
+    SetConsoleCursorPosition(hConsole, { 0, 0 });
+}
+
+void BusMonitor::Print() {
+    ClearScreen();
+    std::cout << "----------BUS MONITOR----------" << std::endl;
+    std::cout << "Words Sent: " << wordsSent << std::endl;
+    std::cout << "Command Words: " << commandSent << std::endl;
+    std::cout << "Data Words: " << dataSent << std::endl;
+    std::cout << "Status Words: " << statusSent << std::endl;
+
+    std::cout << "BC->RT" << static_cast<int>(command.rtAddress) << " : Command" << endl;
+
+    if (decodedstat.busy == 1) {
+        std::cout << "RT" << static_cast<int>(command.rtAddress) << "->BC" << " : BUSY" << endl;
+        if (decodedstat.messageError == 1) {
+            std::cout << " | MESSAGE ERROR " << endl;
+        }
+    }
+
+    else if (decodedstat.messageError == 1) {
+        std::cout << "RT" << static_cast<int>(command.rtAddress) << "->BC" << " : MESSAGE ERROR" << endl;
+        if (decodedstat.messageError == 1) {
+            std::cout << " | BUSY " << endl;
+        }
+    }
+
+    else {
+        std::cout << "RT" << static_cast<int>(command.rtAddress) << "->BC" << " : OK" << endl;
+    }
+}
+
+void BusMonitor::Run() {
+    while (true) {
+        ReceiveCommand();
+        if (command.transmit == 0) {
+            ReceiveData();
+            ReceiveStatus();
+            cout << endl;
+        }
+        else if (command.transmit == 1) {
+            ReceiveStatus();
+            ReceiveData();
+            cout << endl;
+        }
+        Print();
+    }
+}
+#pragma once
+
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <iostream>
+#include <array>
+#include "CommandWord.h"
+#include "StatusWord.h"
+#include "Ports.h"
+
+#pragma comment(lib, "ws2_32.lib")
+
+class BusMonitor {
+public:
+	BusMonitor();
+	~BusMonitor();
+
+	void Run();
+
+private:
+	void InitializeSocket();
+	void CloseSocket(SOCKET sock);
+
+	void ReceiveCommand();
+	void ReceiveData();
+	void ReceiveStatus();
+
+	void Print();
+	void ClearScreen();
+
+private:
+	SOCKET sock = INVALID_SOCKET;
+	sockaddr_in address{};
+	sockaddr_in sender{};
+
+	int senderSize = sizeof(sender);
+	DecodedCommand command;
+	DecodedStatus decodedstat;
+
+	uint16_t CommandWord;
+	uint16_t DataWord;
+	uint16_t statusWord;
+
+	uint16_t wordsSent = 0;
+	uint16_t dataSent = 0;
+	uint16_t statusSent = 0;
+	uint16_t commandSent=0;
+
+	bool messageerror = FALSE;
+	bool busy = FALSE;
+
+	uint8_t memorysize = 31;
+
+};
+#include "BusMonitor.h"
+
+using namespace std;
+
+int main() {
+	BusMonitor BM;
+
+	BM.Run();
+}
+#include "RemoteTerminal.h"
+
+int main() {
+    RemoteTerminal rt;
+
+    rt.Run();
+
+}
+
+#include "RemoteTerminal.h"
+
+RemoteTerminal::RemoteTerminal() {
+    if (!InitializeSocket()) {
+        exit(EXIT_FAILURE);
+    }
+}	
+
+RemoteTerminal::~RemoteTerminal() {
+	CloseSocket(sock);
+}
+
+bool RemoteTerminal::InitializeSocket() {
+      
+
+    WSADATA wsaData;
+
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+        cout << "WSAStartup failed" << endl;
+    }
+
+    sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+
+    if (sock == INVALID_SOCKET){
+        cout << "Invalid Socket" << endl;
+    }
+
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = INADDR_ANY;
+    for (port = Ports::RemoteTerminals[0]; port <= Ports::RemoteTerminals.back(); port++) {
+        address.sin_port = htons(port);
+
+        if (bind(sock, reinterpret_cast<sockaddr*>(&address), sizeof(address)) == 0) {
+            RT = port - 6999;
+            break;
+        }
+        else {
+
+            if (port == Ports::RemoteTerminals.back()) {
+                cout << "All ports are full" << endl;
+                return false;
+            }
+
+            else {
+                cout << "Port " << port << " is full" << endl;
+            }
+
+        }
+    }
+
+    
+    cout << "Assigned to the port: " << port << " RT address: " << RT << endl;
+
+    destination.sin_family = AF_INET;
+    destination.sin_port = htons(Ports::BUS);
+    destination.sin_addr.s_addr = INADDR_ANY;
+    InetPton(AF_INET, "127.0.0.1", &destination.sin_addr);
+
+    return true;
+}
+
+void RemoteTerminal::CloseSocket(SOCKET sock) {
+	closesocket(sock);
+	WSACleanup();
+}
+
+void RemoteTerminal::ReceiveCommand() {
+    int CMDReceived = recvfrom(sock, reinterpret_cast<char*>(&CommandWord), sizeof(CommandWord), 0,
+        reinterpret_cast<sockaddr*>(&sender),
+        &senderSize);
+
+    if (CMDReceived == SOCKET_ERROR) {
+        cout << "Error occured receiving CommandWord" << endl;
+    }
+
+    command = DecodeCMD(CommandWord);
+}
+
+void RemoteTerminal::ReceiveData(int wordCount,int subAddress) {
+    for (int i = 0;i < wordCount;i++) {
+
+        int DataReceived = recvfrom(sock, reinterpret_cast<char*>(&DataWord), sizeof(DataWord), 0,
+            reinterpret_cast<sockaddr*>(&sender),
+            &senderSize);
+
+        if (subAddress + i == memory.size()) {
+            messageerror = true;
+            return;
+        }
+                           
+
+        if (DataReceived == SOCKET_ERROR){
+            cout << "Receive failed: " << WSAGetLastError() << endl;
+            return;
+        }
+        else {
+            memory[subAddress + i] = DataWord;
+            cout << "Data " << memory[subAddress + i] << " Written on the address: " << subAddress + i << endl;
+        }
+    }
+}
+
+void RemoteTerminal::SendData(int wordCount, int subAddress) {
+    uint16_t data;
+    for (int i = 0;i < wordCount;i++) {
+
+        if (subAddress + i == memory.size()) {
+            messageerror = true;
+            return;
+        }
+
+        data = memory[subAddress + i];
+
+
+        int bytesSent = sendto(sock, reinterpret_cast<char*>(&data), sizeof(data), 0,
+            reinterpret_cast<sockaddr*>(&sender),
+            sizeof(sender));
+
+        if (bytesSent == SOCKET_ERROR)
+        {
+            cout << "Send failed: " << WSAGetLastError() << endl;
+        }
+        else
+        {
+            cout << "Sent " << bytesSent << " bytes to the BC " << endl;
+
+        }
+    }
+}
+
+void RemoteTerminal::SendStatus(DecodedCommand command) {
+
+    if (static_cast<int>(command.subAddress) + static_cast<int>(command.wordCount) > memory.size()-1) {
+        messageerror = true;
+    }
+    else {
+        messageerror = false;
+    }
+
+    statusWord = CreateStatusWord(command.rtAddress, messageerror);
+    int StatusSent = sendto(sock, reinterpret_cast<char*>(&statusWord), sizeof(statusWord), 0,
+        reinterpret_cast<sockaddr*>(&sender),
+        sizeof(sender));
+    DecodedStatus decodedstat = DecodeStatus(statusWord);
+
+
+
+    if (decodedstat.messageError == 1) {
+        cout << "Error, can't send/read data." << endl;
+    }
+    else if (decodedstat.busy == 1) {
+        cout << "Busy, can't send data." << endl;
+    }
+    else {
+        cout << "Sent status." << endl;
+    }
+}
+
+void RemoteTerminal::Run() {
+    while (true) {
+        ReceiveCommand();
+        if (static_cast<int>(command.rtAddress) == RT) {
+            if (command.transmit == 0) {
+                ReceiveData(command.wordCount, command.subAddress);
+                SendStatus(command);
+            }
+            else if (command.transmit == 1) {
+                SendStatus(command);
+                SendData(command.wordCount, command.subAddress);
+            }
+        }
+    }
+}
+#pragma once
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <iostream>
+#include <array>
+#include "CommandWord.h"
+#include "StatusWord.h"
+#include "Ports.h"
+
+#pragma comment(lib, "ws2_32.lib")
+
+using namespace std;
+
+class RemoteTerminal {
+public:
+	RemoteTerminal();
+	~RemoteTerminal();
+
+	void Run();
+private:
+	bool InitializeSocket();
+	void CloseSocket(SOCKET sock);
+
+	void ReceiveCommand();
+
+	void ReceiveData(int wordCount, int subAddress);
+	void SendData(int WordCount, int subAddress);
+	void SendStatus(DecodedCommand command);
+
+private:
+	int RT;
+	uint16_t port;
+
+	SOCKET sock = INVALID_SOCKET;
+	sockaddr_in address{};
+	sockaddr_in destination{};
+	sockaddr_in sender{};
+
+	int destinationSize = sizeof(destination);
+	int senderSize = sizeof(sender);
+
+	DecodedCommand command;
+
+	array<int16_t, 32> memory{};
+	uint8_t memAddress = 0;
+
+	uint16_t CommandWord;
+	int16_t DataWord;
+	uint16_t statusWord;
+	
+	bool messageerror = FALSE;
+	bool busy = FALSE;
+};
+#include "MissionComputer.h"
+
+int main() {
+	MissionComputer mc;
+	mc.Run();
+	return 0;
+}
+#include "MissionComputer.h"
+#include "Ports.h"
+#include "CommandWord.h"
+#include "StatusWord.h"
+#include <iostream>
+
+MissionComputer::MissionComputer() {
+	if (!InitializeSocket())
+	{
+		throw std::runtime_error("Socket initialization failed");
+	}
+}
+
+MissionComputer::~MissionComputer() {
+	CloseSocket();
+}
+
+bool MissionComputer::InitializeSocket() {
+	WSADATA wsaData;
+
+	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+		std::cout << "WSAStartup failed" << std::endl;
+		return false;
+	}
+
+	sockARINC = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+	sock1553 = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+
+	if (sockARINC == INVALID_SOCKET)
+	{
+		std::cout << "429 Invalid Socket" << std::endl;
+		return false;
+	}
+	if (sock1553 == INVALID_SOCKET)
+	{
+		std::cout << "1553 Invalid Socket" << std::endl;
+		return false;
+	}
+
+	ARINCaddress.sin_family = AF_INET;
+	ARINCaddress.sin_port = htons(Ports::MissionComputer);
+	ARINCaddress.sin_addr.s_addr = INADDR_ANY;
+
+	BUSaddress.sin_family = AF_INET;
+	BUSaddress.sin_port = htons(Ports::BusController);
+	BUSaddress.sin_addr.s_addr = INADDR_ANY;
+
+	displayDestination.sin_family = AF_INET;
+	displayDestination.sin_port = htons(Ports::Display);
+	displayDestination.sin_addr.s_addr = INADDR_ANY;
+	InetPton(AF_INET, "127.0.0.1", &displayDestination.sin_addr);
+
+	busDestination.sin_family = AF_INET;
+	busDestination.sin_port = htons(Ports::BUS);
+	busDestination.sin_addr.s_addr = INADDR_ANY;
+	InetPton(AF_INET, "127.0.0.1", &busDestination.sin_addr);
+
+
+	if (bind(sockARINC, reinterpret_cast<sockaddr*>(&ARINCaddress), sizeof(ARINCaddress)) == SOCKET_ERROR) {
+		std::cout << "ARINC Bind failed: " << WSAGetLastError() << std::endl;
+		return false;
+	}
+	if (bind(sock1553, reinterpret_cast<sockaddr*>(&BUSaddress), sizeof(BUSaddress)) == SOCKET_ERROR) {
+		std::cout << "BUS Bind failed: " << WSAGetLastError() << std::endl;
+		return false;
+	}
+	return true;
+}
+
+void MissionComputer::CloseSocket() {
+	closesocket(sockARINC);
+	closesocket(sock1553);
+	WSACleanup();
+}
+
+void MissionComputer::ReceiveARINCWord() {
+	int senderSize = sizeof(sender);
+	int bytesReceived = recvfrom(sockARINC, reinterpret_cast<char*>(&raw), sizeof(raw), 0,
+		reinterpret_cast<sockaddr*>(&sender), &senderSize);
+	if (bytesReceived == SOCKET_ERROR) {
+		std::cout << "Receive failed: " << WSAGetLastError() << std::endl;
+	}
+}
+
+bool MissionComputer::DecodeWord() {
+	int ones = 0;
+
+	for (int i = 0; i < 32; i++)
+	{
+		if (raw & (1u << i))
+			ones++;
+	}
+
+	if (ones % 2 == 0) {
+		return false;
+	}
+
+	word = DecodeARINCWord(raw);
+
+	return true;
+}
+
+void MissionComputer::UpdateState() {
+	switch (word.label)
+	{
+	case Label::GPSAltitude:
+		aircraftState.gpsAltitudeSSM = word.ssm;
+		if (word.ssm == SSM::NormalOperation)
+			aircraftState.gpsAltitude = word.data;
+		break;
+	case Label::groundSpeed:
+		aircraftState.groundSpeedSSM = word.ssm;
+		if (word.ssm == SSM::NormalOperation)
+			aircraftState.groundSpeed = word.data;
+		break;
+	case Label::Latitude:
+		aircraftState.latitudeSSM = word.ssm;
+		if (word.ssm == SSM::NormalOperation)
+			aircraftState.latitude = word.data;
+		break;
+	case Label::Longitude:
+		aircraftState.longitudeSSM = word.ssm;
+		if (word.ssm == SSM::NormalOperation)
+			aircraftState.longitude = word.data;
+		break;
+	case Label::BaroAltitude:
+		aircraftState.baroAltitudeSSM = word.ssm;
+		if (word.ssm == SSM::NormalOperation)
+			aircraftState.baroAltitude = word.data;
+		break;
+	case Label::Airspeed:
+		aircraftState.airspeedSSM = word.ssm;
+		if (word.ssm == SSM::NormalOperation)
+			aircraftState.airspeed = word.data;
+		break;
+	case Label::Heading:
+		aircraftState.headingSSM = word.ssm;
+		if (word.ssm == SSM::NormalOperation)
+			aircraftState.heading = word.data;
+		break;
+	case Label::Roll:
+		aircraftState.rollSSM = word.ssm;
+		if (word.ssm == SSM::NormalOperation)
+			aircraftState.roll = word.data;
+		break;
+	case Label::Pitch:
+		aircraftState.pitchSSM = word.ssm;
+		if (word.ssm == SSM::NormalOperation)
+			aircraftState.pitch = word.data;
+		break;
+	case Label::RadioAltitude:
+		aircraftState.radioAltitudeSSM = word.ssm;
+		if (word.ssm == SSM::NormalOperation)
+			aircraftState.radioAltitude = word.data;
+		break;
+	default:
+		std::cout << "Error: Unknown label" << std::endl;
+	}
+}
+
+
+void MissionComputer::SendToDisplay() {
+	int wordSent = sendto(sockARINC, reinterpret_cast<char*>(&aircraftState), sizeof(aircraftState), 0,
+		reinterpret_cast<sockaddr*>(&displayDestination),
+		sizeof(displayDestination));
+	if (wordSent == SOCKET_ERROR) {
+		std::cout << "sendto failed: " << WSAGetLastError() << std::endl;
+	}
+}
+
+
+void MissionComputer::Send1553Message(uint8_t rtAddress,
+									uint8_t subAddress,
+									const int16_t* dataWords,
+									uint8_t wordCount)
+{
+	uint16_t cmd = CreateCommandWord(rtAddress, 0, subAddress, wordCount);
+
+	sendto(sock1553, reinterpret_cast<char*>(&cmd), sizeof(cmd), 0,
+		reinterpret_cast<sockaddr*>(&busDestination),
+		sizeof(busDestination));
+
+	for (int i = 0; i < wordCount; i++)
+	{
+		sendto(sock1553, reinterpret_cast<const char*>(&dataWords[i]), sizeof(dataWords[i]), 0,
+			reinterpret_cast<sockaddr*>(&busDestination),
+			sizeof(busDestination));
+	}
+}
+
+void MissionComputer::SendToRT1() {
+	int16_t dataWords[]{
+	aircraftState.heading,
+	aircraftState.roll,
+	aircraftState.pitch,
+	aircraftState.baroAltitude,
+	aircraftState.radioAltitude,
+	};
+	Send1553Message(1, 0, dataWords, 5);
+}
+
+void MissionComputer::SendToRT2() {
+	int16_t dataWords[]{
+	aircraftState.latitude,
+	aircraftState.longitude,
+	aircraftState.groundSpeed,
+	aircraftState.heading
+	};
+	Send1553Message(2, 0, dataWords, 4);
+}
+
+void MissionComputer::SendToRT3() {
+	int16_t dataWords[]{
+	aircraftState.heading,
+	aircraftState.roll,
+	aircraftState.pitch,
+	aircraftState.airspeed,
+	aircraftState.baroAltitude,
+	aircraftState.radioAltitude
+	};
+	Send1553Message(3, 0, dataWords, 6);
+}
+
+
+void MissionComputer::SendToRT4() {
+	int16_t dataWords[]{
+	aircraftState.latitude,
+	aircraftState.longitude,
+	aircraftState.groundSpeed,
+	aircraftState.heading,
+	};
+	Send1553Message(4, 0, dataWords, 4);
+}
+
+
+DecodedStatus MissionComputer::ReceiveStatus() {
+	int busDestinationSize = sizeof(busDestination);
+	uint16_t StatusWord;
+	int StatusReceived = recvfrom(sock1553, reinterpret_cast<char*>(&StatusWord), sizeof(StatusWord), 0,
+		reinterpret_cast<sockaddr*>(&busDestination), &busDestinationSize);
+
+	if (StatusReceived == SOCKET_ERROR) {
+		cout << "Receive failed: " << WSAGetLastError() << endl;
+	}
+
+	DecodedStatus decodedstat = DecodeStatus(StatusWord);
+
+	if (decodedstat.messageError == 1 || decodedstat.busy == 1) {
+		cout << "RT reported an error" << endl;
+	}
+
+	return decodedstat; //void olsa da olurmuÅŸ
+}
+
+void MissionComputer::Run() {
+	while (true) {
+		ReceiveARINCWord();
+
+		if (!DecodeWord())
+			continue;
+
+		UpdateState();
+		SendToDisplay();
+		SendToRT1();
+		Delay(50);
+		SendToRT2();
+		Delay(50);
+		SendToRT3();
+		Delay(50);
+		SendToRT4();
+		Delay(50);
+				
+	}
+}
+#pragma once
+#pragma comment(lib, "ws2_32.lib")
+
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <cstdint>
+#include <random>
+#include "ARINCWord.h"
+#include "States.h"
+#include "CommandWord.h"
+#include "StatusWord.h"
+#include "AircraftState.h"
+
+
+class MissionComputer {
+public:
+	MissionComputer();
+	~MissionComputer();
+
+	void Run();
+
+private:
+	bool InitializeSocket();
+	void CloseSocket();
+
+	void ReceiveARINCWord();
+	bool DecodeWord();
+	void UpdateState();
+
+	void SendToDisplay();
+	void SendToRT1();
+	void SendToRT2();
+	void SendToRT3();
+	void SendToRT4();
+
+	void Send1553Commands(uint8_t rtAddress);
+	void Send1553Data(DecodedCommand decodedcmd);
+	void Send1553Message(uint8_t rtAddress,
+		uint8_t subAddress,
+		const int16_t* dataWords,
+		uint8_t wordCount);
+	void Receive1553Data();
+	DecodedStatus ReceiveStatus();
+
+private:
+	SOCKET sockARINC = INVALID_SOCKET;
+	SOCKET sock1553 = INVALID_SOCKET;
+	sockaddr_in ARINCaddress{};
+	sockaddr_in BUSaddress{};
+	sockaddr_in displayDestination{};
+	sockaddr_in busDestination{};
+	sockaddr_in BUS{};
+	sockaddr_in sender{};
+
+	uint32_t raw;
+	uint16_t data;
+	ARINCWord word;
+
+	AircraftState aircraftState;
+	DecodedCommand decodedcmd;
+
+};
+/* This source file must have a .cpp extension so that all C++ compilers
+   recognize the extension without flags.  Borland does not know .cxx for
+   example.  */
+#ifndef __cplusplus
+# error "A C compiler has been selected for C++."
+#endif
+
+#if !defined(__has_include)
+/* If the compiler does not have __has_include, pretend the answer is
+   always no.  */
+#  define __has_include(x) 0
+#endif
+
+
+/* Version number components: V=Version, R=Revision, P=Patch
+   Version date components:   YYYY=Year, MM=Month,   DD=Day  */
+
+#if defined(__INTEL_COMPILER) || defined(__ICC)
+# define COMPILER_ID "Intel"
+# if defined(_MSC_VER)
+#  define SIMULATE_ID "MSVC"
+# endif
+# if defined(__GNUC__)
+#  define SIMULATE_ID "GNU"
+# endif
+  /* __INTEL_COMPILER = VRP prior to 2021, and then VVVV for 2021 and later,
+     except that a few beta releases use the old format with V=2021.  */
+# if __INTEL_COMPILER < 2021 || __INTEL_COMPILER == 202110 || __INTEL_COMPILER == 202111
+#  define COMPILER_VERSION_MAJOR DEC(__INTEL_COMPILER/100)
+#  define COMPILER_VERSION_MINOR DEC(__INTEL_COMPILER/10 % 10)
+#  if defined(__INTEL_COMPILER_UPDATE)
+#   define COMPILER_VERSION_PATCH DEC(__INTEL_COMPILER_UPDATE)
+#  else
+#   define COMPILER_VERSION_PATCH DEC(__INTEL_COMPILER   % 10)
+#  endif
+# else
+#  define COMPILER_VERSION_MAJOR DEC(__INTEL_COMPILER)
+#  define COMPILER_VERSION_MINOR DEC(__INTEL_COMPILER_UPDATE)
+   /* The third version component from --version is an update index,
+      but no macro is provided for it.  */
+#  define COMPILER_VERSION_PATCH DEC(0)
+# endif
+# if defined(__INTEL_COMPILER_BUILD_DATE)
+   /* __INTEL_COMPILER_BUILD_DATE = YYYYMMDD */
+#  define COMPILER_VERSION_TWEAK DEC(__INTEL_COMPILER_BUILD_DATE)
+# endif
+# if defined(_MSC_VER)
+   /* _MSC_VER = VVRR */
+#  define SIMULATE_VERSION_MAJOR DEC(_MSC_VER / 100)
+#  define SIMULATE_VERSION_MINOR DEC(_MSC_VER % 100)
+# endif
+# if defined(__GNUC__)
+#  define SIMULATE_VERSION_MAJOR DEC(__GNUC__)
+# elif defined(__GNUG__)
+#  define SIMULATE_VERSION_MAJOR DEC(__GNUG__)
+# endif
+# if defined(__GNUC_MINOR__)
+#  define SIMULATE_VERSION_MINOR DEC(__GNUC_MINOR__)
+# endif
+# if defined(__GNUC_PATCHLEVEL__)
+#  define SIMULATE_VERSION_PATCH DEC(__GNUC_PATCHLEVEL__)
+# endif
+
+#elif (defined(__clang__) && defined(__INTEL_CLANG_COMPILER)) || defined(__INTEL_LLVM_COMPILER)
+# define COMPILER_ID "IntelLLVM"
+#if defined(_MSC_VER)
+# define SIMULATE_ID "MSVC"
+#endif
+#if defined(__GNUC__)
+# define SIMULATE_ID "GNU"
+#endif
+/* __INTEL_LLVM_COMPILER = VVVVRP prior to 2021.2.0, VVVVRRPP for 2021.2.0 and
+ * later.  Look for 6 digit vs. 8 digit version number to decide encoding.
+ * VVVV is no smaller than the current year when a version is released.
+ */
+#if __INTEL_LLVM_COMPILER < 1000000L
+# define COMPILER_VERSION_MAJOR DEC(__INTEL_LLVM_COMPILER/100)
+# define COMPILER_VERSION_MINOR DEC(__INTEL_LLVM_COMPILER/10 % 10)
+# define COMPILER_VERSION_PATCH DEC(__INTEL_LLVM_COMPILER    % 10)
+#else
+# define COMPILER_VERSION_MAJOR DEC(__INTEL_LLVM_COMPILER/10000)
+# define COMPILER_VERSION_MINOR DEC(__INTEL_LLVM_COMPILER/100 % 100)
+# define COMPILER_VERSION_PATCH DEC(__INTEL_LLVM_COMPILER     % 100)
+#endif
+#if defined(_MSC_VER)
+  /* _MSC_VER = VVRR */
+# define SIMULATE_VERSION_MAJOR DEC(_MSC_VER / 100)
+# define SIMULATE_VERSION_MINOR DEC(_MSC_VER % 100)
+#endif
+#if defined(__GNUC__)
+# define SIMULATE_VERSION_MAJOR DEC(__GNUC__)
+#elif defined(__GNUG__)
+# define SIMULATE_VERSION_MAJOR DEC(__GNUG__)
+#endif
+#if defined(__GNUC_MINOR__)
+# define SIMULATE_VERSION_MINOR DEC(__GNUC_MINOR__)
+#endif
+#if defined(__GNUC_PATCHLEVEL__)
+# define SIMULATE_VERSION_PATCH DEC(__GNUC_PATCHLEVEL__)
+#endif
+
+#elif defined(__PATHCC__)
+# define COMPILER_ID "PathScale"
+# define COMPILER_VERSION_MAJOR DEC(__PATHCC__)
+# define COMPILER_VERSION_MINOR DEC(__PATHCC_MINOR__)
+# if defined(__PATHCC_PATCHLEVEL__)
+#  define COMPILER_VERSION_PATCH DEC(__PATHCC_PATCHLEVEL__)
+# endif
+
+#elif defined(__BORLANDC__) && defined(__CODEGEARC_VERSION__)
+# define COMPILER_ID "Embarcadero"
+# define COMPILER_VERSION_MAJOR HEX(__CODEGEARC_VERSION__>>24 & 0x00FF)
+# define COMPILER_VERSION_MINOR HEX(__CODEGEARC_VERSION__>>16 & 0x00FF)
+# define COMPILER_VERSION_PATCH DEC(__CODEGEARC_VERSION__     & 0xFFFF)
+
+#elif defined(__BORLANDC__)
+# define COMPILER_ID "Borland"
+  /* __BORLANDC__ = 0xVRR */
+# define COMPILER_VERSION_MAJOR HEX(__BORLANDC__>>8)
+# define COMPILER_VERSION_MINOR HEX(__BORLANDC__ & 0xFF)
+
+#elif defined(__WATCOMC__) && __WATCOMC__ < 1200
+# define COMPILER_ID "Watcom"
+   /* __WATCOMC__ = VVRR */
+# define COMPILER_VERSION_MAJOR DEC(__WATCOMC__ / 100)
+# define COMPILER_VERSION_MINOR DEC((__WATCOMC__ / 10) % 10)
+# if (__WATCOMC__ % 10) > 0
+#  define COMPILER_VERSION_PATCH DEC(__WATCOMC__ % 10)
+# endif
+
+#elif defined(__WATCOMC__)
+# define COMPILER_ID "OpenWatcom"
+   /* __WATCOMC__ = VVRP + 1100 */
+# define COMPILER_VERSION_MAJOR DEC((__WATCOMC__ - 1100) / 100)
+# define COMPILER_VERSION_MINOR DEC((__WATCOMC__ / 10) % 10)
+# if (__WATCOMC__ % 10) > 0
+#  define COMPILER_VERSION_PATCH DEC(__WATCOMC__ % 10)
+# endif
+
+#elif defined(__SUNPRO_CC)
+# define COMPILER_ID "SunPro"
+# if __SUNPRO_CC >= 0x5100
+   /* __SUNPRO_CC = 0xVRRP */
+#  define COMPILER_VERSION_MAJOR HEX(__SUNPRO_CC>>12)
+#  define COMPILER_VERSION_MINOR HEX(__SUNPRO_CC>>4 & 0xFF)
+#  define COMPILER_VERSION_PATCH HEX(__SUNPRO_CC    & 0xF)
+# else
+   /* __SUNPRO_CC = 0xVRP */
+#  define COMPILER_VERSION_MAJOR HEX(__SUNPRO_CC>>8)
+#  define COMPILER_VERSION_MINOR HEX(__SUNPRO_CC>>4 & 0xF)
+#  define COMPILER_VERSION_PATCH HEX(__SUNPRO_CC    & 0xF)
+# endif
+
+#elif defined(__HP_aCC)
+# define COMPILER_ID "HP"
+  /* __HP_aCC = VVRRPP */
+# define COMPILER_VERSION_MAJOR DEC(__HP_aCC/10000)
+# define COMPILER_VERSION_MINOR DEC(__HP_aCC/100 % 100)
+# define COMPILER_VERSION_PATCH DEC(__HP_aCC     % 100)
+
+#elif defined(__DECCXX)
+# define COMPILER_ID "Compaq"
+  /* __DECCXX_VER = VVRRTPPPP */
+# define COMPILER_VERSION_MAJOR DEC(__DECCXX_VER/10000000)
+# define COMPILER_VERSION_MINOR DEC(__DECCXX_VER/100000  % 100)
+# define COMPILER_VERSION_PATCH DEC(__DECCXX_VER         % 10000)
+
+#elif defined(__IBMCPP__) && defined(__COMPILER_VER__)
+# define COMPILER_ID "zOS"
+  /* __IBMCPP__ = VRP */
+# define COMPILER_VERSION_MAJOR DEC(__IBMCPP__/100)
+# define COMPILER_VERSION_MINOR DEC(__IBMCPP__/10 % 10)
+# define COMPILER_VERSION_PATCH DEC(__IBMCPP__    % 10)
+
+#elif defined(__open_xl__) && defined(__clang__)
+# define COMPILER_ID "IBMClang"
+# define COMPILER_VERSION_MAJOR DEC(__open_xl_version__)
+# define COMPILER_VERSION_MINOR DEC(__open_xl_release__)
+# define COMPILER_VERSION_PATCH DEC(__open_xl_modification__)
+# define COMPILER_VERSION_TWEAK DEC(__open_xl_ptf_fix_level__)
+# define COMPILER_VERSION_INTERNAL_STR  __clang_version__
+
+
+#elif defined(__ibmxl__) && defined(__clang__)
+# define COMPILER_ID "XLClang"
+# define COMPILER_VERSION_MAJOR DEC(__ibmxl_version__)
+# define COMPILER_VERSION_MINOR DEC(__ibmxl_release__)
+# define COMPILER_VERSION_PATCH DEC(__ibmxl_modification__)
+# define COMPILER_VERSION_TWEAK DEC(__ibmxl_ptf_fix_level__)
+
+
+#elif defined(__IBMCPP__) && !defined(__COMPILER_VER__) && __IBMCPP__ >= 800
+# define COMPILER_ID "XL"
+  /* __IBMCPP__ = VRP */
+# define COMPILER_VERSION_MAJOR DEC(__IBMCPP__/100)
+# define COMPILER_VERSION_MINOR DEC(__IBMCPP__/10 % 10)
+# define COMPILER_VERSION_PATCH DEC(__IBMCPP__    % 10)
+
+#elif defined(__IBMCPP__) && !defined(__COMPILER_VER__) && __IBMCPP__ < 800
+# define COMPILER_ID "VisualAge"
+  /* __IBMCPP__ = VRP */
+# define COMPILER_VERSION_MAJOR DEC(__IBMCPP__/100)
+# define COMPILER_VERSION_MINOR DEC(__IBMCPP__/10 % 10)
+# define COMPILER_VERSION_PATCH DEC(__IBMCPP__    % 10)
+
+#elif defined(__NVCOMPILER)
+# define COMPILER_ID "NVHPC"
+# define COMPILER_VERSION_MAJOR DEC(__NVCOMPILER_MAJOR__)
+# define COMPILER_VERSION_MINOR DEC(__NVCOMPILER_MINOR__)
+# if defined(__NVCOMPILER_PATCHLEVEL__)
+#  define COMPILER_VERSION_PATCH DEC(__NVCOMPILER_PATCHLEVEL__)
+# endif
+
+#elif defined(__PGI)
+# define COMPILER_ID "PGI"
+# define COMPILER_VERSION_MAJOR DEC(__PGIC__)
+# define COMPILER_VERSION_MINOR DEC(__PGIC_MINOR__)
+# if defined(__PGIC_PATCHLEVEL__)
+#  define COMPILER_VERSION_PATCH DEC(__PGIC_PATCHLEVEL__)
+# endif
+
+#elif defined(__clang__) && defined(__cray__)
+# define COMPILER_ID "CrayClang"
+# define COMPILER_VERSION_MAJOR DEC(__cray_major__)
+# define COMPILER_VERSION_MINOR DEC(__cray_minor__)
+# define COMPILER_VERSION_PATCH DEC(__cray_patchlevel__)
+# define COMPILER_VERSION_INTERNAL_STR __clang_version__
+
+
+#elif defined(_CRAYC)
+# define COMPILER_ID "Cray"
+# define COMPILER_VERSION_MAJOR DEC(_RELEASE_MAJOR)
+# define COMPILER_VERSION_MINOR DEC(_RELEASE_MINOR)
+
+#elif defined(__TI_COMPILER_VERSION__)
+# define COMPILER_ID "TI"
+  /* __TI_COMPILER_VERSION__ = VVVRRRPPP */
+# define COMPILER_VERSION_MAJOR DEC(__TI_COMPILER_VERSION__/1000000)
+# define COMPILER_VERSION_MINOR DEC(__TI_COMPILER_VERSION__/1000   % 1000)
+# define COMPILER_VERSION_PATCH DEC(__TI_COMPILER_VERSION__        % 1000)
+
+#elif defined(__CLANG_FUJITSU)
+# define COMPILER_ID "FujitsuClang"
+# define COMPILER_VERSION_MAJOR DEC(__FCC_major__)
+# define COMPILER_VERSION_MINOR DEC(__FCC_minor__)
+# define COMPILER_VERSION_PATCH DEC(__FCC_patchlevel__)
+# define COMPILER_VERSION_INTERNAL_STR __clang_version__
+
+
+#elif defined(__FUJITSU)
+# define COMPILER_ID "Fujitsu"
+# if defined(__FCC_version__)
+#   define COMPILER_VERSION __FCC_version__
+# elif defined(__FCC_major__)
+#   define COMPILER_VERSION_MAJOR DEC(__FCC_major__)
+#   define COMPILER_VERSION_MINOR DEC(__FCC_minor__)
+#   define COMPILER_VERSION_PATCH DEC(__FCC_patchlevel__)
+# endif
+# if defined(__fcc_version)
+#   define COMPILER_VERSION_INTERNAL DEC(__fcc_version)
+# elif defined(__FCC_VERSION)
+#   define COMPILER_VERSION_INTERNAL DEC(__FCC_VERSION)
+# endif
+
+
+#elif defined(__ghs__)
+# define COMPILER_ID "GHS"
+/* __GHS_VERSION_NUMBER = VVVVRP */
+# ifdef __GHS_VERSION_NUMBER
+# define COMPILER_VERSION_MAJOR DEC(__GHS_VERSION_NUMBER / 100)
+# define COMPILER_VERSION_MINOR DEC(__GHS_VERSION_NUMBER / 10 % 10)
+# define COMPILER_VERSION_PATCH DEC(__GHS_VERSION_NUMBER      % 10)
+# endif
+
+#elif defined(__TASKING__)
+# define COMPILER_ID "Tasking"
+  # define COMPILER_VERSION_MAJOR DEC(__VERSION__/1000)
+  # define COMPILER_VERSION_MINOR DEC(__VERSION__ % 100)
+# define COMPILER_VERSION_INTERNAL DEC(__VERSION__)
+
+#elif defined(__ORANGEC__)
+# define COMPILER_ID "OrangeC"
+# define COMPILER_VERSION_MAJOR DEC(__ORANGEC_MAJOR__)
+# define COMPILER_VERSION_MINOR DEC(__ORANGEC_MINOR__)
+# define COMPILER_VERSION_PATCH DEC(__ORANGEC_PATCHLEVEL__)
+
+#elif defined(__RENESAS__)
+# define COMPILER_ID "Renesas"
+/* __RENESAS_VERSION__ = 0xVVRRPP00 */
+# define COMPILER_VERSION_MAJOR HEX(__RENESAS_VERSION__ >> 24 & 0xFF)
+# define COMPILER_VERSION_MINOR HEX(__RENESAS_VERSION__ >> 16 & 0xFF)
+# define COMPILER_VERSION_PATCH HEX(__RENESAS_VERSION__ >> 8  & 0xFF)
+
+#elif defined(__SCO_VERSION__)
+# define COMPILER_ID "SCO"
+
+#elif defined(__ARMCC_VERSION) && !defined(__clang__)
+# define COMPILER_ID "ARMCC"
+#if __ARMCC_VERSION >= 1000000
+  /* __ARMCC_VERSION = VRRPPPP */
+  # define COMPILER_VERSION_MAJOR DEC(__ARMCC_VERSION/1000000)
+  # define COMPILER_VERSION_MINOR DEC(__ARMCC_VERSION/10000 % 100)
+  # define COMPILER_VERSION_PATCH DEC(__ARMCC_VERSION     % 10000)
+#else
+  /* __ARMCC_VERSION = VRPPPP */
+  # define COMPILER_VERSION_MAJOR DEC(__ARMCC_VERSION/100000)
+  # define COMPILER_VERSION_MINOR DEC(__ARMCC_VERSION/10000 % 10)
+  # define COMPILER_VERSION_PATCH DEC(__ARMCC_VERSION    % 10000)
+#endif
+
+
+#elif defined(__clang__) && defined(__apple_build_version__)
+# define COMPILER_ID "AppleClang"
+# if defined(_MSC_VER)
+#  define SIMULATE_ID "MSVC"
+# endif
+# define COMPILER_VERSION_MAJOR DEC(__clang_major__)
+# define COMPILER_VERSION_MINOR DEC(__clang_minor__)
+# define COMPILER_VERSION_PATCH DEC(__clang_patchlevel__)
+# if defined(_MSC_VER)
+   /* _MSC_VER = VVRR */
+#  define SIMULATE_VERSION_MAJOR DEC(_MSC_VER / 100)
+#  define SIMULATE_VERSION_MINOR DEC(_MSC_VER % 100)
+# endif
+# define COMPILER_VERSION_TWEAK DEC(__apple_build_version__)
+
+#elif defined(__clang__) && defined(__ARMCOMPILER_VERSION)
+# define COMPILER_ID "ARMClang"
+  # define COMPILER_VERSION_MAJOR DEC(__ARMCOMPILER_VERSION/1000000)
+  # define COMPILER_VERSION_MINOR DEC(__ARMCOMPILER_VERSION/10000 % 100)
+  # define COMPILER_VERSION_PATCH DEC(__ARMCOMPILER_VERSION/100   % 100)
+# define COMPILER_VERSION_INTERNAL DEC(__ARMCOMPILER_VERSION)
+
+#elif defined(__clang__) && defined(__ti__)
+# define COMPILER_ID "TIClang"
+  # define COMPILER_VERSION_MAJOR DEC(__ti_major__)
+  # define COMPILER_VERSION_MINOR DEC(__ti_minor__)
+  # define COMPILER_VERSION_PATCH DEC(__ti_patchlevel__)
+# define COMPILER_VERSION_INTERNAL DEC(__ti_version__)
+
+#elif defined(__clang__)
+# define COMPILER_ID "Clang"
+# if defined(_MSC_VER)
+#  define SIMULATE_ID "MSVC"
+# endif
+# define COMPILER_VERSION_MAJOR DEC(__clang_major__)
+# define COMPILER_VERSION_MINOR DEC(__clang_minor__)
+# define COMPILER_VERSION_PATCH DEC(__clang_patchlevel__)
+# if defined(_MSC_VER)
+   /* _MSC_VER = VVRR */
+#  define SIMULATE_VERSION_MAJOR DEC(_MSC_VER / 100)
+#  define SIMULATE_VERSION_MINOR DEC(_MSC_VER % 100)
+# endif
+
+#elif defined(__LCC__) && (defined(__GNUC__) || defined(__GNUG__) || defined(__MCST__))
+# define COMPILER_ID "LCC"
+# define COMPILER_VERSION_MAJOR DEC(__LCC__ / 100)
+# define COMPILER_VERSION_MINOR DEC(__LCC__ % 100)
+# if defined(__LCC_MINOR__)
+#  define COMPILER_VERSION_PATCH DEC(__LCC_MINOR__)
+# endif
+# if defined(__GNUC__) && defined(__GNUC_MINOR__)
+#  define SIMULATE_ID "GNU"
+#  define SIMULATE_VERSION_MAJOR DEC(__GNUC__)
+#  define SIMULATE_VERSION_MINOR DEC(__GNUC_MINOR__)
+#  if defined(__GNUC_PATCHLEVEL__)
+#   define SIMULATE_VERSION_PATCH DEC(__GNUC_PATCHLEVEL__)
+#  endif
+# endif
+
+#elif defined(__GNUC__) || defined(__GNUG__)
+# define COMPILER_ID "GNU"
+# if defined(__GNUC__)
+#  define COMPILER_VERSION_MAJOR DEC(__GNUC__)
+# else
+#  define COMPILER_VERSION_MAJOR DEC(__GNUG__)
+# endif
+# if defined(__GNUC_MINOR__)
+#  define COMPILER_VERSION_MINOR DEC(__GNUC_MINOR__)
+# endif
+# if defined(__GNUC_PATCHLEVEL__)
+#  define COMPILER_VERSION_PATCH DEC(__GNUC_PATCHLEVEL__)
+# endif
+
+#elif defined(_MSC_VER)
+# define COMPILER_ID "MSVC"
+  /* _MSC_VER = VVRR */
+# define COMPILER_VERSION_MAJOR DEC(_MSC_VER / 100)
+# define COMPILER_VERSION_MINOR DEC(_MSC_VER % 100)
+# if defined(_MSC_FULL_VER)
+#  if _MSC_VER >= 1400
+    /* _MSC_FULL_VER = VVRRPPPPP */
+#   define COMPILER_VERSION_PATCH DEC(_MSC_FULL_VER % 100000)
+#  else
+    /* _MSC_FULL_VER = VVRRPPPP */
+#   define COMPILER_VERSION_PATCH DEC(_MSC_FULL_VER % 10000)
+#  endif
+# endif
+# if defined(_MSC_BUILD)
+#  define COMPILER_VERSION_TWEAK DEC(_MSC_BUILD)
+# endif
+
+#elif defined(_ADI_COMPILER)
+# define COMPILER_ID "ADSP"
+#if defined(__VERSIONNUM__)
+  /* __VERSIONNUM__ = 0xVVRRPPTT */
+#  define COMPILER_VERSION_MAJOR DEC(__VERSIONNUM__ >> 24 & 0xFF)
+#  define COMPILER_VERSION_MINOR DEC(__VERSIONNUM__ >> 16 & 0xFF)
+#  define COMPILER_VERSION_PATCH DEC(__VERSIONNUM__ >> 8 & 0xFF)
+#  define COMPILER_VERSION_TWEAK DEC(__VERSIONNUM__ & 0xFF)
+#endif
+
+#elif defined(__IAR_SYSTEMS_ICC__) || defined(__IAR_SYSTEMS_ICC)
+# define COMPILER_ID "IAR"
+# if defined(__VER__) && defined(__ICCARM__)
+#  define COMPILER_VERSION_MAJOR DEC((__VER__) / 1000000)
+#  define COMPILER_VERSION_MINOR DEC(((__VER__) / 1000) % 1000)
+#  define COMPILER_VERSION_PATCH DEC((__VER__) % 1000)
+#  define COMPILER_VERSION_INTERNAL DEC(__IAR_SYSTEMS_ICC__)
+# elif defined(__VER__) && (defined(__ICCAVR__) || defined(__ICCRX__) || defined(__ICCRH850__) || defined(__ICCRL78__) || defined(__ICC430__) || defined(__ICCRISCV__) || defined(__ICCV850__) || defined(__ICC8051__) || defined(__ICCSTM8__))
+#  define COMPILER_VERSION_MAJOR DEC((__VER__) / 100)
+#  define COMPILER_VERSION_MINOR DEC((__VER__) - (((__VER__) / 100)*100))
+#  define COMPILER_VERSION_PATCH DEC(__SUBVERSION__)
+#  define COMPILER_VERSION_INTERNAL DEC(__IAR_SYSTEMS_ICC__)
+# endif
+
+#elif defined(__DCC__) && defined(_DIAB_TOOL)
+# define COMPILER_ID "Diab"
+  # define COMPILER_VERSION_MAJOR DEC(__VERSION_MAJOR_NUMBER__)
+  # define COMPILER_VERSION_MINOR DEC(__VERSION_MINOR_NUMBER__)
+  # define COMPILER_VERSION_PATCH DEC(__VERSION_ARCH_FEATURE_NUMBER__)
+  # define COMPILER_VERSION_TWEAK DEC(__VERSION_BUG_FIX_NUMBER__)
+
+
+
+/* These compilers are either not known or too old to define an
+  identification macro.  Try to identify the platform and guess that
+  it is the native compiler.  */
+#elif defined(__hpux) || defined(__hpua)
+# define COMPILER_ID "HP"
+
+#else /* unknown compiler */
+# define COMPILER_ID ""
+#endif
+
+/* Construct the string literal in pieces to prevent the source from
+   getting matched.  Store it in a pointer rather than an array
+   because some compilers will just produce instructions to fill the
+   array rather than assigning a pointer to a static array.  */
+char const* info_compiler = "INFO" ":" "compiler[" COMPILER_ID "]";
+#ifdef SIMULATE_ID
+char const* info_simulate = "INFO" ":" "simulate[" SIMULATE_ID "]";
+#endif
+
+#ifdef __QNXNTO__
+char const* qnxnto = "INFO" ":" "qnxnto[]";
+#endif
+
+#if defined(__CRAYXT_COMPUTE_LINUX_TARGET)
+char const *info_cray = "INFO" ":" "compiler_wrapper[CrayPrgEnv]";
+#endif
+
+#define STRINGIFY_HELPER(X) #X
+#define STRINGIFY(X) STRINGIFY_HELPER(X)
+
+/* Identify known platforms by name.  */
+#if defined(__linux) || defined(__linux__) || defined(linux)
+# define PLATFORM_ID "Linux"
+
+#elif defined(__MSYS__)
+# define PLATFORM_ID "MSYS"
+
+#elif defined(__CYGWIN__)
+# define PLATFORM_ID "Cygwin"
+
+#elif defined(__MINGW32__)
+# define PLATFORM_ID "MinGW"
+
+#elif defined(__APPLE__)
+# define PLATFORM_ID "Darwin"
+
+#elif defined(_WIN32) || defined(__WIN32__) || defined(WIN32)
+# define PLATFORM_ID "Windows"
+
+#elif defined(__FreeBSD__) || defined(__FreeBSD)
+# define PLATFORM_ID "FreeBSD"
+
+#elif defined(__NetBSD__) || defined(__NetBSD)
+# define PLATFORM_ID "NetBSD"
+
+#elif defined(__OpenBSD__) || defined(__OPENBSD)
+# define PLATFORM_ID "OpenBSD"
+
+#elif defined(__sun) || defined(sun)
+# define PLATFORM_ID "SunOS"
+
+#elif defined(_AIX) || defined(__AIX) || defined(__AIX__) || defined(__aix) || defined(__aix__)
+# define PLATFORM_ID "AIX"
+
+#elif defined(__hpux) || defined(__hpux__)
+# define PLATFORM_ID "HP-UX"
+
+#elif defined(__HAIKU__)
+# define PLATFORM_ID "Haiku"
+
+#elif defined(__BeOS) || defined(__BEOS__) || defined(_BEOS)
+# define PLATFORM_ID "BeOS"
+
+#elif defined(__QNX__) || defined(__QNXNTO__)
+# define PLATFORM_ID "QNX"
+
+#elif defined(__tru64) || defined(_tru64) || defined(__TRU64__)
+# define PLATFORM_ID "Tru64"
+
+#elif defined(__riscos) || defined(__riscos__)
+# define PLATFORM_ID "RISCos"
+
+#elif defined(__sinix) || defined(__sinix__) || defined(__SINIX__)
+# define PLATFORM_ID "SINIX"
+
+#elif defined(__UNIX_SV__)
+# define PLATFORM_ID "UNIX_SV"
+
+#elif defined(__bsdos__)
+# define PLATFORM_ID "BSDOS"
+
+#elif defined(_MPRAS) || defined(MPRAS)
+# define PLATFORM_ID "MP-RAS"
+
+#elif defined(__osf) || defined(__osf__)
+# define PLATFORM_ID "OSF1"
+
+#elif defined(_SCO_SV) || defined(SCO_SV) || defined(sco_sv)
+# define PLATFORM_ID "SCO_SV"
+
+#elif defined(__ultrix) || defined(__ultrix__) || defined(_ULTRIX)
+# define PLATFORM_ID "ULTRIX"
+
+#elif defined(__XENIX__) || defined(_XENIX) || defined(XENIX)
+# define PLATFORM_ID "Xenix"
+
+#elif defined(__WATCOMC__)
+# if defined(__LINUX__)
+#  define PLATFORM_ID "Linux"
+
+# elif defined(__DOS__)
+#  define PLATFORM_ID "DOS"
+
+# elif defined(__OS2__)
+#  define PLATFORM_ID "OS2"
+
+# elif defined(__WINDOWS__)
+#  define PLATFORM_ID "Windows3x"
+
+# elif defined(__VXWORKS__)
+#  define PLATFORM_ID "VxWorks"
+
+# else /* unknown platform */
+#  define PLATFORM_ID
+# endif
+
+#elif defined(__INTEGRITY)
+# if defined(INT_178B)
+#  define PLATFORM_ID "Integrity178"
+
+# else /* regular Integrity */
+#  define PLATFORM_ID "Integrity"
+# endif
+
+# elif defined(_ADI_COMPILER)
+#  define PLATFORM_ID "ADSP"
+
+#else /* unknown platform */
+# define PLATFORM_ID
+
+#endif
+
+/* For windows compilers MSVC and Intel we can determine
+   the architecture of the compiler being used.  This is because
+   the compilers do not have flags that can change the architecture,
+   but rather depend on which compiler is being used
+*/
+#if defined(_WIN32) && defined(_MSC_VER)
+# if defined(_M_IA64)
+#  define ARCHITECTURE_ID "IA64"
+
+# elif defined(_M_ARM64EC)
+#  define ARCHITECTURE_ID "ARM64EC"
+
+# elif defined(_M_X64) || defined(_M_AMD64)
+#  define ARCHITECTURE_ID "x64"
+
+# elif defined(_M_IX86)
+#  define ARCHITECTURE_ID "X86"
+
+# elif defined(_M_ARM64)
+#  define ARCHITECTURE_ID "ARM64"
+
+# elif defined(_M_ARM)
+#  if _M_ARM == 4
+#   define ARCHITECTURE_ID "ARMV4I"
+#  elif _M_ARM == 5
+#   define ARCHITECTURE_ID "ARMV5I"
+#  else
+#   define ARCHITECTURE_ID "ARMV" STRINGIFY(_M_ARM)
+#  endif
+
+# elif defined(_M_MIPS)
+#  define ARCHITECTURE_ID "MIPS"
+
+# elif defined(_M_SH)
+#  define ARCHITECTURE_ID "SHx"
+
+# else /* unknown architecture */
+#  define ARCHITECTURE_ID ""
+# endif
+
+#elif defined(__WATCOMC__)
+# if defined(_M_I86)
+#  define ARCHITECTURE_ID "I86"
+
+# elif defined(_M_IX86)
+#  define ARCHITECTURE_ID "X86"
+
+# else /* unknown architecture */
+#  define ARCHITECTURE_ID ""
+# endif
+
+#elif defined(__IAR_SYSTEMS_ICC__) || defined(__IAR_SYSTEMS_ICC)
+# if defined(__ICCARM__)
+#  define ARCHITECTURE_ID "ARM"
+
+# elif defined(__ICCRX__)
+#  define ARCHITECTURE_ID "RX"
+
+# elif defined(__ICCRH850__)
+#  define ARCHITECTURE_ID "RH850"
+
+# elif defined(__ICCRL78__)
+#  define ARCHITECTURE_ID "RL78"
+
+# elif defined(__ICCRISCV__)
+#  define ARCHITECTURE_ID "RISCV"
+
+# elif defined(__ICCAVR__)
+#  define ARCHITECTURE_ID "AVR"
+
+# elif defined(__ICC430__)
+#  define ARCHITECTURE_ID "MSP430"
+
+# elif defined(__ICCV850__)
+#  define ARCHITECTURE_ID "V850"
+
+# elif defined(__ICC8051__)
+#  define ARCHITECTURE_ID "8051"
+
+# elif defined(__ICCSTM8__)
+#  define ARCHITECTURE_ID "STM8"
+
+# else /* unknown architecture */
+#  define ARCHITECTURE_ID ""
+# endif
+
+#elif defined(__ghs__)
+# if defined(__PPC64__)
+#  define ARCHITECTURE_ID "PPC64"
+
+# elif defined(__ppc__)
+#  define ARCHITECTURE_ID "PPC"
+
+# elif defined(__ARM__)
+#  define ARCHITECTURE_ID "ARM"
+
+# elif defined(__x86_64__)
+#  define ARCHITECTURE_ID "x64"
+
+# elif defined(__i386__)
+#  define ARCHITECTURE_ID "X86"
+
+# else /* unknown architecture */
+#  define ARCHITECTURE_ID ""
+# endif
+
+#elif defined(__clang__) && defined(__ti__)
+# if defined(__ARM_ARCH)
+#  define ARCHITECTURE_ID "ARM"
+
+# else /* unknown architecture */
+#  define ARCHITECTURE_ID ""
+# endif
+
+#elif defined(__TI_COMPILER_VERSION__)
+# if defined(__TI_ARM__)
+#  define ARCHITECTURE_ID "ARM"
+
+# elif defined(__MSP430__)
+#  define ARCHITECTURE_ID "MSP430"
+
+# elif defined(__TMS320C28XX__)
+#  define ARCHITECTURE_ID "TMS320C28x"
+
+# elif defined(__TMS320C6X__) || defined(_TMS320C6X)
+#  define ARCHITECTURE_ID "TMS320C6x"
+
+# else /* unknown architecture */
+#  define ARCHITECTURE_ID ""
+# endif
+
+# elif defined(__ADSPSHARC__)
+#  define ARCHITECTURE_ID "SHARC"
+
+# elif defined(__ADSPBLACKFIN__)
+#  define ARCHITECTURE_ID "Blackfin"
+
+#elif defined(__TASKING__)
+
+# if defined(__CTC__) || defined(__CPTC__)
+#  define ARCHITECTURE_ID "TriCore"
+
+# elif defined(__CMCS__)
+#  define ARCHITECTURE_ID "MCS"
+
+# elif defined(__CARM__) || defined(__CPARM__)
+#  define ARCHITECTURE_ID "ARM"
+
+# elif defined(__CARC__)
+#  define ARCHITECTURE_ID "ARC"
+
+# elif defined(__C51__)
+#  define ARCHITECTURE_ID "8051"
+
+# elif defined(__CPCP__)
+#  define ARCHITECTURE_ID "PCP"
+
+# else
+#  define ARCHITECTURE_ID ""
+# endif
+
+#elif defined(__RENESAS__)
+# if defined(__CCRX__)
+#  define ARCHITECTURE_ID "RX"
+
+# elif defined(__CCRL__)
+#  define ARCHITECTURE_ID "RL78"
+
+# elif defined(__CCRH__)
+#  define ARCHITECTURE_ID "RH850"
+
+# else
+#  define ARCHITECTURE_ID ""
+# endif
+
+#else
+#  define ARCHITECTURE_ID
+#endif
+
+/* Convert integer to decimal digit literals.  */
+#define DEC(n)                   \
+  ('0' + (((n) / 10000000)%10)), \
+  ('0' + (((n) / 1000000)%10)),  \
+  ('0' + (((n) / 100000)%10)),   \
+  ('0' + (((n) / 10000)%10)),    \
+  ('0' + (((n) / 1000)%10)),     \
+  ('0' + (((n) / 100)%10)),      \
+  ('0' + (((n) / 10)%10)),       \
+  ('0' +  ((n) % 10))
+
+/* Convert integer to hex digit literals.  */
+#define HEX(n)             \
+  ('0' + ((n)>>28 & 0xF)), \
+  ('0' + ((n)>>24 & 0xF)), \
+  ('0' + ((n)>>20 & 0xF)), \
+  ('0' + ((n)>>16 & 0xF)), \
+  ('0' + ((n)>>12 & 0xF)), \
+  ('0' + ((n)>>8  & 0xF)), \
+  ('0' + ((n)>>4  & 0xF)), \
+  ('0' + ((n)     & 0xF))
+
+/* Construct a string literal encoding the version number. */
+#ifdef COMPILER_VERSION
+char const* info_version = "INFO" ":" "compiler_version[" COMPILER_VERSION "]";
+
+/* Construct a string literal encoding the version number components. */
+#elif defined(COMPILER_VERSION_MAJOR)
+char const info_version[] = {
+  'I', 'N', 'F', 'O', ':',
+  'c','o','m','p','i','l','e','r','_','v','e','r','s','i','o','n','[',
+  COMPILER_VERSION_MAJOR,
+# ifdef COMPILER_VERSION_MINOR
+  '.', COMPILER_VERSION_MINOR,
+#  ifdef COMPILER_VERSION_PATCH
+   '.', COMPILER_VERSION_PATCH,
+#   ifdef COMPILER_VERSION_TWEAK
+    '.', COMPILER_VERSION_TWEAK,
+#   endif
+#  endif
+# endif
+  ']','\0'};
+#endif
+
+/* Construct a string literal encoding the internal version number. */
+#ifdef COMPILER_VERSION_INTERNAL
+char const info_version_internal[] = {
+  'I', 'N', 'F', 'O', ':',
+  'c','o','m','p','i','l','e','r','_','v','e','r','s','i','o','n','_',
+  'i','n','t','e','r','n','a','l','[',
+  COMPILER_VERSION_INTERNAL,']','\0'};
+#elif defined(COMPILER_VERSION_INTERNAL_STR)
+char const* info_version_internal = "INFO" ":" "compiler_version_internal[" COMPILER_VERSION_INTERNAL_STR "]";
+#endif
+
+/* Construct a string literal encoding the version number components. */
+#ifdef SIMULATE_VERSION_MAJOR
+char const info_simulate_version[] = {
+  'I', 'N', 'F', 'O', ':',
+  's','i','m','u','l','a','t','e','_','v','e','r','s','i','o','n','[',
+  SIMULATE_VERSION_MAJOR,
+# ifdef SIMULATE_VERSION_MINOR
+  '.', SIMULATE_VERSION_MINOR,
+#  ifdef SIMULATE_VERSION_PATCH
+   '.', SIMULATE_VERSION_PATCH,
+#   ifdef SIMULATE_VERSION_TWEAK
+    '.', SIMULATE_VERSION_TWEAK,
+#   endif
+#  endif
+# endif
+  ']','\0'};
+#endif
+
+/* Construct the string literal in pieces to prevent the source from
+   getting matched.  Store it in a pointer rather than an array
+   because some compilers will just produce instructions to fill the
+   array rather than assigning a pointer to a static array.  */
+char const* info_platform = "INFO" ":" "platform[" PLATFORM_ID "]";
+char const* info_arch = "INFO" ":" "arch[" ARCHITECTURE_ID "]";
+
+
+
+#define CXX_STD_98 199711L
+#define CXX_STD_11 201103L
+#define CXX_STD_14 201402L
+#define CXX_STD_17 201703L
+#define CXX_STD_20 202002L
+#define CXX_STD_23 202302L
+
+#if defined(__INTEL_COMPILER) && defined(_MSVC_LANG)
+#  if _MSVC_LANG > CXX_STD_17
+#    define CXX_STD _MSVC_LANG
+#  elif _MSVC_LANG == CXX_STD_17 && defined(__cpp_aggregate_paren_init)
+#    define CXX_STD CXX_STD_20
+#  elif _MSVC_LANG > CXX_STD_14 && __cplusplus > CXX_STD_17
+#    define CXX_STD CXX_STD_20
+#  elif _MSVC_LANG > CXX_STD_14
+#    define CXX_STD CXX_STD_17
+#  elif defined(__INTEL_CXX11_MODE__) && defined(__cpp_aggregate_nsdmi)
+#    define CXX_STD CXX_STD_14
+#  elif defined(__INTEL_CXX11_MODE__)
+#    define CXX_STD CXX_STD_11
+#  else
+#    define CXX_STD CXX_STD_98
+#  endif
+#elif defined(_MSC_VER) && defined(_MSVC_LANG)
+#  if _MSVC_LANG > __cplusplus
+#    define CXX_STD _MSVC_LANG
+#  else
+#    define CXX_STD __cplusplus
+#  endif
+#elif defined(__NVCOMPILER)
+#  if __cplusplus == CXX_STD_17 && defined(__cpp_aggregate_paren_init)
+#    define CXX_STD CXX_STD_20
+#  else
+#    define CXX_STD __cplusplus
+#  endif
+#elif defined(__INTEL_COMPILER) || defined(__PGI)
+#  if __cplusplus == CXX_STD_11 && defined(__cpp_namespace_attributes)
+#    define CXX_STD CXX_STD_17
+#  elif __cplusplus == CXX_STD_11 && defined(__cpp_aggregate_nsdmi)
+#    define CXX_STD CXX_STD_14
+#  else
+#    define CXX_STD __cplusplus
+#  endif
+#elif (defined(__IBMCPP__) || defined(__ibmxl__)) && defined(__linux__)
+#  if __cplusplus == CXX_STD_11 && defined(__cpp_aggregate_nsdmi)
+#    define CXX_STD CXX_STD_14
+#  else
+#    define CXX_STD __cplusplus
+#  endif
+#elif __cplusplus == 1 && defined(__GXX_EXPERIMENTAL_CXX0X__)
+#  define CXX_STD CXX_STD_11
+#else
+#  define CXX_STD __cplusplus
+#endif
+
+const char* info_language_standard_default = "INFO" ":" "standard_default["
+#if CXX_STD > CXX_STD_23
+  "26"
+#elif CXX_STD > CXX_STD_20
+  "23"
+#elif CXX_STD > CXX_STD_17
+  "20"
+#elif CXX_STD > CXX_STD_14
+  "17"
+#elif CXX_STD > CXX_STD_11
+  "14"
+#elif CXX_STD >= CXX_STD_11
+  "11"
+#else
+  "98"
+#endif
+"]";
+
+const char* info_language_extensions_default = "INFO" ":" "extensions_default["
+#if (defined(__clang__) || defined(__GNUC__) || defined(__xlC__) ||           \
+     defined(__TI_COMPILER_VERSION__) || defined(__RENESAS__)) &&             \
+  !defined(__STRICT_ANSI__)
+  "ON"
+#else
+  "OFF"
+#endif
+"]";
+
+/*--------------------------------------------------------------------------*/
+
+int main(int argc, char* argv[])
+{
+  int require = 0;
+  require += info_compiler[argc];
+  require += info_platform[argc];
+  require += info_arch[argc];
+#ifdef COMPILER_VERSION_MAJOR
+  require += info_version[argc];
+#endif
+#if defined(COMPILER_VERSION_INTERNAL) || defined(COMPILER_VERSION_INTERNAL_STR)
+  require += info_version_internal[argc];
+#endif
+#ifdef SIMULATE_ID
+  require += info_simulate[argc];
+#endif
+#ifdef SIMULATE_VERSION_MAJOR
+  require += info_simulate_version[argc];
+#endif
+#if defined(__CRAYXT_COMPUTE_LINUX_TARGET)
+  require += info_cray[argc];
+#endif
+  require += info_language_standard_default[argc];
+  require += info_language_extensions_default[argc];
+  (void)argv;
+  return require;
+}
+

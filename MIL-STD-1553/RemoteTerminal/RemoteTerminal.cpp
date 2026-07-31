@@ -137,7 +137,7 @@ void RemoteTerminal::SendStatus(DecodedCommand command) {
         messageerror = false;
     }
 
-    statusWord = CreateStatusWord(command.rtAddress, messageerror, busy);
+    statusWord = CreateStatusWord(command.rtAddress, messageerror);
     int StatusSent = sendto(sock, reinterpret_cast<char*>(&statusWord), sizeof(statusWord), 0,
         reinterpret_cast<sockaddr*>(&sender),
         sizeof(sender));

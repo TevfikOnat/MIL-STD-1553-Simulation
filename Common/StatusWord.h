@@ -1,7 +1,9 @@
 #pragma once
 #include <iostream>
+#include <random>
 
-uint16_t CreateStatusWord(uint8_t rtaddress, bool me, bool busy);
+
+uint16_t CreateStatusWord(uint8_t rtaddress, bool me);
 
 struct DecodedStatus {
 
