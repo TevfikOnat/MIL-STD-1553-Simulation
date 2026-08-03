@@ -38,69 +38,43 @@ void BusMonitor::CloseSocket(SOCKET sock) {
     WSACleanup();
 }
 
-void BusMonitor::ReceiveCommand() {
-    int CMDReceived = recvfrom(sock, reinterpret_cast<char*>(&CommandWord), sizeof(CommandWord), 0,
+void BusMonitor::ReceivePacket() {
+
+    int packetReceived = recvfrom(sock, reinterpret_cast<char*>(&packet), sizeof(packet), 0,
         reinterpret_cast<sockaddr*>(&sender),
         &senderSize);
 
-    if (CMDReceived == SOCKET_ERROR) {
-        cout << "Error occured receiving CommandWord" << endl;
+    switch (packet.sync) {
+    case Sync::COMMAND:
+        ReceiveCommand(packet.Word);
+        break;
+    case Sync::DATA:
+        ReceiveData(packet.Word);
+        break;
+    case Sync::STATUS:
+        ReceiveStatus(packet.Word);
+        ErrorLog();
+        break;
     }
 
-    
+}
+
+void BusMonitor::ReceiveCommand(uint16_t CommandWord) {
     commandSent++;
     wordsSent++;
 
     command = DecodeCMD(CommandWord);
-    /*
-    cout << "COMMAND " << "RT" << static_cast<int>(command.rtAddress);
-    if (command.transmit == 0) {
-        cout << " RECEIVE" << endl;
-    }
-    else {
-        cout << " TRANSMIT" << endl;
-    }
-    cout << "WORD COUNT: " << static_cast<int>(command.wordCount) << endl;*/
 }
 
-void BusMonitor::ReceiveData() {
-    uint16_t DataWord;
-    int DataReceived;
-
-    for (int i = 0;i < command.wordCount;i++) {
-        DataReceived = recvfrom(sock, reinterpret_cast<char*>(&DataWord), sizeof(DataWord), 0,
-            reinterpret_cast<sockaddr*>(&sender), &senderSize);
-        
-        if (DataReceived == SOCKET_ERROR) {
-            //cout << "DATA RECEIVE FAILED: " << WSAGetLastError() << endl;
-        }
-        else {
-            //cout << "DATA " << i + 1 << ": " << DataWord << endl;
-            wordsSent++;
-            dataSent++;
-        }
-    }
+void BusMonitor::ReceiveData(uint16_t DataWord) {
+    wordsSent++;
+    dataSent++;
 }
 
-void BusMonitor::ReceiveStatus() {
-    uint16_t StatusWord;
-    int StatusReceived = recvfrom(sock, reinterpret_cast<char*>(&StatusWord), sizeof(StatusWord), 0,
-        reinterpret_cast<sockaddr*>(&sender), &senderSize);
-
-    if (StatusReceived == SOCKET_ERROR) {
-        //cout << "STATUS RECEIVE FAILED " << endl;
-    }
-    else {
-        decodedstat = DecodeStatus(StatusWord);
-        statusSent++;
-        wordsSent++;/*
-            if (decodedstat.messageError == 1 || decodedstat.busy == 1) {
-                cout << (decodedstat.messageError == 1 ? "STATUS: MESSAGE ERROR" : "STATUS: RT BUSY") << endl;
-            }
-            else {
-                cout << "STATUS: OK" << endl;
-            }*/
-    }
+void BusMonitor::ReceiveStatus(uint16_t StatusWord) {
+    decodedstat = DecodeStatus(StatusWord);
+    statusSent++;
+    wordsSent++;
 }
 
 void BusMonitor::ClearScreen() {
@@ -139,6 +113,10 @@ void BusMonitor::ErrorLog() {
     Terminal = static_cast<int>(command.rtAddress);
     TerminalAddress = Terminal - 1;
 
+    if (TerminalAddress < 0 || TerminalAddress >= 4) {
+        return;
+    }
+
     if (decodedstat.busy == 1) {
         RTs[TerminalAddress].busyCount++;
     }
@@ -153,19 +131,14 @@ void BusMonitor::ErrorLog() {
 }
 
 void BusMonitor::Run() {
-    while (true) {
-        ReceiveCommand();
-        if (command.transmit == 0) {
-            ReceiveData();
-            ReceiveStatus();
-            cout << endl;
-        }
-        else if (command.transmit == 1) {
-            ReceiveStatus();
-            ReceiveData();
-            cout << endl;
-        }
-        ErrorLog();
-        Print();
-    }
+	lastPrintTime = std::chrono::steady_clock::now();
+	while (true) {
+		ReceivePacket();
+		auto now = std::chrono::steady_clock::now();
+		auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastPrintTime).count();
+		if (elapsed >= 50) {
+			Print();
+			lastPrintTime = now;
+		}
+	}
 }

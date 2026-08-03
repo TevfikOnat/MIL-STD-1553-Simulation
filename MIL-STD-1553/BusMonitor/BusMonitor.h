@@ -8,6 +8,7 @@
 #include "StatusWord.h"
 #include "Ports.h"
 #include <iomanip>
+#include <chrono>
 
 #pragma comment(lib, "ws2_32.lib")
 
@@ -31,9 +32,10 @@ private:
 	void InitializeSocket();
 	void CloseSocket(SOCKET sock);
 
-	void ReceiveCommand();
-	void ReceiveData();
-	void ReceiveStatus();
+	void ReceivePacket();
+	void ReceiveCommand(uint16_t CommandWord);
+	void ReceiveData(uint16_t DataWord);
+	void ReceiveStatus(uint16_t StatusWord);
 	void ErrorLog();
 
 	void Print();
@@ -48,14 +50,16 @@ private:
 	DecodedCommand command;
 	DecodedStatus decodedstat;
 
+	Packet1553 packet;
+
 	uint16_t CommandWord;
 	uint16_t DataWord;
 	uint16_t statusWord;
 
-	uint16_t wordsSent = 0;
-	uint16_t dataSent = 0;
-	uint16_t statusSent = 0;
-	uint16_t commandSent=0;
+	uint32_t wordsSent = 0;
+	uint32_t dataSent = 0;
+	uint32_t statusSent = 0;
+	uint32_t commandSent=0;
 
 	bool messageerror = FALSE;
 	bool busy = FALSE;
@@ -65,6 +69,8 @@ private:
 	ErrorCount RTs[4];
 	int Terminal;
 	int TerminalAddress;
+
+	std::chrono::steady_clock::time_point lastPrintTime;
 
 };
 

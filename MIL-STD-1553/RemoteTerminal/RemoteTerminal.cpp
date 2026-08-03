@@ -64,8 +64,40 @@ void RemoteTerminal::CloseSocket(SOCKET sock) {
 	WSACleanup();
 }
 
-void RemoteTerminal::ReceiveCommand() {
-    int CMDReceived = recvfrom(sock, reinterpret_cast<char*>(&CommandWord), sizeof(CommandWord), 0,
+void RemoteTerminal::ReceivePacket() {
+	int bytesReceived = recvfrom(sock, reinterpret_cast<char*>(&packet), sizeof(packet), 0,
+		reinterpret_cast<sockaddr*>(&sender),
+		&senderSize);
+	if (bytesReceived == SOCKET_ERROR) {
+		cout << "Receive failed: " << WSAGetLastError() << endl;
+	}
+
+    switch (packet.sync) {
+	case Sync::COMMAND:
+        CommandWord = packet.Word;
+        command = DecodeCMD(CommandWord);
+        if (command.rtAddress == RT) {
+            if (command.transmit == 0) {
+                ReceiveData(command.wordCount, command.subAddress);
+                SendStatus(command);
+            }
+            else if (command.transmit == 1) {
+                SendData(command.wordCount, command.subAddress);
+                SendStatus(command);
+            }
+        }
+		break;
+	default:
+		cout << "Gilga" << endl;
+		break;
+    }
+		
+        
+}
+
+/*
+void RemoteTerminal::ReceiveCommand(uint16_t CommandWord) {
+    int CMDReceived = recvfrom(sock, reinterpret_cast<char*>(&packet), sizeof(packet), 0,
         reinterpret_cast<sockaddr*>(&sender),
         &senderSize);
 
@@ -73,13 +105,17 @@ void RemoteTerminal::ReceiveCommand() {
         cout << "Error occured receiving CommandWord" << endl;
     }
 
+    
+    CommandWord = packet.Word;
     command = DecodeCMD(CommandWord);
+    
+    
 }
-
+*/
 void RemoteTerminal::ReceiveData(int wordCount,int subAddress) {
     for (int i = 0;i < wordCount;i++) {
 
-        int DataReceived = recvfrom(sock, reinterpret_cast<char*>(&DataWord), sizeof(DataWord), 0,
+        int DataReceived = recvfrom(sock, reinterpret_cast<char*>(&packet), sizeof(packet), 0,
             reinterpret_cast<sockaddr*>(&sender),
             &senderSize);
 
@@ -94,6 +130,7 @@ void RemoteTerminal::ReceiveData(int wordCount,int subAddress) {
             return;
         }
         else {
+            DataWord = packet.Word;
             memory[subAddress + i] = DataWord;
             cout << "Data " << memory[subAddress + i] << " Written on the address: " << subAddress + i << endl;
         }
@@ -102,6 +139,8 @@ void RemoteTerminal::ReceiveData(int wordCount,int subAddress) {
 
 void RemoteTerminal::SendData(int wordCount, int subAddress) {
     uint16_t data;
+    packet.sync = Sync::DATA;
+
     for (int i = 0;i < wordCount;i++) {
 
         if (subAddress + i == memory.size()) {
@@ -110,9 +149,9 @@ void RemoteTerminal::SendData(int wordCount, int subAddress) {
         }
 
         data = memory[subAddress + i];
+        packet.Word = data;
 
-
-        int bytesSent = sendto(sock, reinterpret_cast<char*>(&data), sizeof(data), 0,
+        int bytesSent = sendto(sock, reinterpret_cast<char*>(&packet), sizeof(packet), 0,
             reinterpret_cast<sockaddr*>(&sender),
             sizeof(sender));
 
@@ -130,7 +169,7 @@ void RemoteTerminal::SendData(int wordCount, int subAddress) {
 
 void RemoteTerminal::SendStatus(DecodedCommand command) {
 
-    if (static_cast<int>(command.subAddress) + static_cast<int>(command.wordCount) > memory.size()-1) {
+    if (static_cast<int>(command.subAddress) + static_cast<int>(command.wordCount) > memory.size()) {
         messageerror = true;
     }
     else {
@@ -138,7 +177,9 @@ void RemoteTerminal::SendStatus(DecodedCommand command) {
     }
 
     statusWord = CreateStatusWord(command.rtAddress, messageerror);
-    int StatusSent = sendto(sock, reinterpret_cast<char*>(&statusWord), sizeof(statusWord), 0,
+    packet.sync = Sync::STATUS;
+    packet.Word = statusWord;
+    int StatusSent = sendto(sock, reinterpret_cast<char*>(&packet), sizeof(packet), 0,
         reinterpret_cast<sockaddr*>(&sender),
         sizeof(sender));
     DecodedStatus decodedstat = DecodeStatus(statusWord);
@@ -156,18 +197,9 @@ void RemoteTerminal::SendStatus(DecodedCommand command) {
     }
 }
 
+
 void RemoteTerminal::Run() {
     while (true) {
-        ReceiveCommand();
-        if (static_cast<int>(command.rtAddress) == RT) {
-            if (command.transmit == 0) {
-                ReceiveData(command.wordCount, command.subAddress);
-                SendStatus(command);
-            }
-            else if (command.transmit == 1) {
-                SendStatus(command);
-                SendData(command.wordCount, command.subAddress);
-            }
-        }
+		ReceivePacket();
     }
 }

@@ -3,6 +3,8 @@
 #include "CommandWord.h"
 #include "StatusWord.h"
 #include <iostream>
+#include <timeapi.h>
+#pragma comment(lib, "winmm.lib")
 
 MissionComputer::MissionComputer() {
 	if (!InitializeSocket())
@@ -79,6 +81,74 @@ void MissionComputer::ReceiveARINCWord() {
 		reinterpret_cast<sockaddr*>(&sender), &senderSize);
 	if (bytesReceived == SOCKET_ERROR) {
 		std::cout << "Receive failed: " << WSAGetLastError() << std::endl;
+	}
+}
+
+void MissionComputer::Bus1553Scheduler() {
+	using namespace std::chrono;
+
+	// Sistem saatini referans alıyoruz
+	auto now = steady_clock::now();
+	lastRT1Time = now;
+	lastRT2Time = now;
+	lastRT3Time = now;
+	lastRT4Time = now;
+
+	while (isRunning) {
+		// Şu anki hassas zamanı al
+		now = steady_clock::now();
+
+
+		if (duration_cast<milliseconds>(now - lastRT1Time).count() >= 50) {
+
+			{
+				// Thread 1 tam bu esnada aircraftState'e yazma yapıyorsa bekle.
+				std::lock_guard<std::mutex> lock(stateMutex);
+				SendToRT1();
+			} // Kilit hemen açılır
+
+			lastRT1Time = now; // RT1 için zaman damgasını güncelle
+		}
+
+		if (duration_cast<milliseconds>(now - lastRT2Time).count() >= 100) {
+			{
+				std::lock_guard<std::mutex> lock(stateMutex);
+				SendToRT2();
+			}
+			lastRT2Time = now;
+		}
+
+		if (duration_cast<milliseconds>(now - lastRT3Time).count() >= 200) {
+			{
+				std::lock_guard<std::mutex> lock(stateMutex);
+				SendToRT3();
+			}
+			lastRT3Time = now;
+
+			if (duration_cast<milliseconds>(now - lastRT4Time).count() >= 1000) {
+				{
+					std::lock_guard<std::mutex> lock(stateMutex);
+					SendToRT4();
+				}
+				lastRT4Time = now;
+			}
+
+			// CPU'nun tek çekirdeğini %100 yükte çalıştırmamak için 1 ms'lik mikro uyku
+			std::this_thread::sleep_for(milliseconds(1));
+		}
+	}
+}
+
+void MissionComputer::ARINCReceiverLoop() {
+	while (isRunning) {
+		ReceiveARINCWord();
+
+		if (DecodeWord()) {
+			std::lock_guard<std::mutex> lock(stateMutex);
+
+			UpdateState(); 
+			SendToDisplay();
+		}
 	}
 }
 
@@ -178,14 +248,18 @@ void MissionComputer::Send1553Message(uint8_t rtAddress,
 	subAddress = (addressroll(generator) < 15 ? 30 : subAddress);
 	
 	uint16_t cmd = CreateCommandWord(rtAddress, 0, subAddress, wordCount);
+	cmdPacket.sync = Sync::COMMAND;
+	cmdPacket.Word = cmd;
 
-	sendto(sock1553, reinterpret_cast<char*>(&cmd), sizeof(cmd), 0,
+	sendto(sock1553, reinterpret_cast<char*>(&cmdPacket), sizeof(cmdPacket), 0,
 		reinterpret_cast<sockaddr*>(&busDestination),
 		sizeof(busDestination));
 
 	for (int i = 0; i < wordCount; i++)
 	{
-		sendto(sock1553, reinterpret_cast<const char*>(&dataWords[i]), sizeof(dataWords[i]), 0,
+		dataPacket.sync = Sync::DATA;
+		dataPacket.Word = dataWords[i];
+		sendto(sock1553, reinterpret_cast<const char*>(&dataPacket), sizeof(dataPacket), 0,
 			reinterpret_cast<sockaddr*>(&busDestination),
 			sizeof(busDestination));
 	}
@@ -256,22 +330,13 @@ DecodedStatus MissionComputer::ReceiveStatus() {
 }
 
 void MissionComputer::Run() {
-	while (true) {
-		ReceiveARINCWord();
+	isRunning = true;
+	timeBeginPeriod(1);
+	std::thread arincThread(&MissionComputer::ARINCReceiverLoop, this);
 
-		if (!DecodeWord())
-			continue;
+	Bus1553Scheduler();
 
-		UpdateState();
-		SendToDisplay();
-		SendToRT1();
-		Delay(50);
-		SendToRT2();
-		Delay(50);
-		SendToRT3();
-		Delay(50);
-		SendToRT4();
-		Delay(50);
-				
+	if (arincThread.joinable()) {
+		arincThread.join();
 	}
 }

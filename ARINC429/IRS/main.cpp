@@ -1,4 +1,4 @@
-//Inertial Refernce System
+//Inertial Reference System
 #include "IRS.h"
 
 int main() {

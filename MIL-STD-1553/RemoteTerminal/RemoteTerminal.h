@@ -21,6 +21,7 @@ private:
 	bool InitializeSocket();
 	void CloseSocket(SOCKET sock);
 
+	void ReceivePacket();
 	void ReceiveCommand();
 
 	void ReceiveData(int wordCount, int subAddress);
@@ -47,6 +48,7 @@ private:
 	uint16_t CommandWord;
 	int16_t DataWord;
 	uint16_t statusWord;
+	Packet1553 packet;
 	
 	bool messageerror = FALSE;
 	bool busy = FALSE;
