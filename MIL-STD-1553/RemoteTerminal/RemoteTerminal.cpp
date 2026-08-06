@@ -72,24 +72,18 @@ void RemoteTerminal::ReceivePacket() {
 		cout << "Receive failed: " << WSAGetLastError() << endl;
 	}
 
-    switch (packet.sync) {
-	case Sync::COMMAND:
-        CommandWord = packet.Word;
-        command = DecodeCMD(CommandWord);
-        if (command.rtAddress == RT) {
-            if (command.transmit == 0) {
-                ReceiveData(command.wordCount, command.subAddress);
-                SendStatus(command);
-            }
-            else if (command.transmit == 1) {
-                SendData(command.wordCount, command.subAddress);
-                SendStatus(command);
-            }
+    
+    CommandWord = packet.Word;
+    command = DecodeCMD(CommandWord);
+    if (command.rtAddress == RT) {
+        if (command.transmit == 0) {
+            ReceiveData(command.wordCount, command.subAddress);
+            SendStatus(command);
         }
-		break;
-	default:
-		cout << "Gilga" << endl;
-		break;
+        else if (command.transmit == 1) {
+            SendStatus(command);
+            SendData(command.wordCount, command.subAddress);
+        }
     }
 		
         

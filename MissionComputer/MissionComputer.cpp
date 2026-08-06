@@ -171,60 +171,52 @@ bool MissionComputer::DecodeWord() {
 }
 
 void MissionComputer::UpdateState() {
-	switch (word.label)
-	{
-	case Label::GPSAltitude:
-		aircraftState.gpsAltitudeSSM = word.ssm;
-		if (word.ssm == SSM::NormalOperation)
+	if (word.ssm == SSM::NormalOperation) {
+		switch (word.label)
+		{
+		case Label::GPSAltitude:
+			aircraftState.gpsAltitudeSSM = word.ssm;
 			aircraftState.gpsAltitude = word.data;
-		break;
-	case Label::groundSpeed:
-		aircraftState.groundSpeedSSM = word.ssm;
-		if (word.ssm == SSM::NormalOperation)
+			break;
+		case Label::groundSpeed:
+			aircraftState.groundSpeedSSM = word.ssm;
 			aircraftState.groundSpeed = word.data;
-		break;
-	case Label::Latitude:
-		aircraftState.latitudeSSM = word.ssm;
-		if (word.ssm == SSM::NormalOperation)
+			break;
+		case Label::Latitude:
+			aircraftState.latitudeSSM = word.ssm;
 			aircraftState.latitude = word.data;
-		break;
-	case Label::Longitude:
-		aircraftState.longitudeSSM = word.ssm;
-		if (word.ssm == SSM::NormalOperation)
+			break;
+		case Label::Longitude:
+			aircraftState.longitudeSSM = word.ssm;
 			aircraftState.longitude = word.data;
-		break;
-	case Label::BaroAltitude:
-		aircraftState.baroAltitudeSSM = word.ssm;
-		if (word.ssm == SSM::NormalOperation)
+			break;
+		case Label::BaroAltitude:
+			aircraftState.baroAltitudeSSM = word.ssm;
 			aircraftState.baroAltitude = word.data;
-		break;
-	case Label::Airspeed:
-		aircraftState.airspeedSSM = word.ssm;
-		if (word.ssm == SSM::NormalOperation)
+			break;
+		case Label::Airspeed:
+			aircraftState.airspeedSSM = word.ssm;
 			aircraftState.airspeed = word.data;
-		break;
-	case Label::Heading:
-		aircraftState.headingSSM = word.ssm;
-		if (word.ssm == SSM::NormalOperation)
+			break;
+		case Label::Heading:
+			aircraftState.headingSSM = word.ssm;
 			aircraftState.heading = word.data;
-		break;
-	case Label::Roll:
-		aircraftState.rollSSM = word.ssm;
-		if (word.ssm == SSM::NormalOperation)
+			break;
+		case Label::Roll:
+			aircraftState.rollSSM = word.ssm;
 			aircraftState.roll = word.data;
-		break;
-	case Label::Pitch:
-		aircraftState.pitchSSM = word.ssm;
-		if (word.ssm == SSM::NormalOperation)
+			break;
+		case Label::Pitch:
+			aircraftState.pitchSSM = word.ssm;
 			aircraftState.pitch = word.data;
-		break;
-	case Label::RadioAltitude:
-		aircraftState.radioAltitudeSSM = word.ssm;
-		if (word.ssm == SSM::NormalOperation)
+			break;
+		case Label::RadioAltitude:
+			aircraftState.radioAltitudeSSM = word.ssm;
 			aircraftState.radioAltitude = word.data;
-		break;
-	default:
-		std::cout << "Error: Unknown label" << std::endl;
+			break;
+		default:
+			std::cout << "Error: Unknown label" << std::endl;
+		}
 	}
 }
 
