@@ -15,10 +15,10 @@
 #include <mutex>
 
 
-class MissionComputer {
+class FlightComputer {
 public:
-	MissionComputer();
-	~MissionComputer();
+	FlightComputer();
+	~FlightComputer();
 
 	void Run();
 

@@ -1,4 +1,4 @@
-#include "MissionComputer.h"
+#include "FlightComputer.h"
 #include "Ports.h"
 #include "CommandWord.h"
 #include "StatusWord.h"
@@ -6,18 +6,18 @@
 #include <timeapi.h>
 #pragma comment(lib, "winmm.lib")
 
-MissionComputer::MissionComputer() {
+FlightComputer::FlightComputer() {
 	if (!InitializeSocket())
 	{
 		throw std::runtime_error("Socket initialization failed");
 	}
 }
 
-MissionComputer::~MissionComputer() {
+FlightComputer::~FlightComputer() {
 	CloseSocket();
 }
 
-bool MissionComputer::InitializeSocket() {
+bool FlightComputer::InitializeSocket() {
 	WSADATA wsaData;
 
 	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
@@ -69,13 +69,13 @@ bool MissionComputer::InitializeSocket() {
 	return true;
 }
 
-void MissionComputer::CloseSocket() {
+void FlightComputer::CloseSocket() {
 	closesocket(sockARINC);
 	closesocket(sock1553);
 	WSACleanup();
 }
 
-void MissionComputer::ReceiveARINCWord() {
+void FlightComputer::ReceiveARINCWord() {
 	int senderSize = sizeof(sender);
 	int bytesReceived = recvfrom(sockARINC, reinterpret_cast<char*>(&raw), sizeof(raw), 0,
 		reinterpret_cast<sockaddr*>(&sender), &senderSize);
@@ -84,7 +84,7 @@ void MissionComputer::ReceiveARINCWord() {
 	}
 }
 
-void MissionComputer::Bus1553Scheduler() {
+void FlightComputer::Bus1553Scheduler() {
 	using namespace std::chrono;
 
 	// Sistem saatini referans alıyoruz
@@ -139,7 +139,7 @@ void MissionComputer::Bus1553Scheduler() {
 	}
 }
 
-void MissionComputer::ARINCReceiverLoop() {
+void FlightComputer::ARINCReceiverLoop() {
 	while (isRunning) {
 		ReceiveARINCWord();
 
@@ -152,7 +152,7 @@ void MissionComputer::ARINCReceiverLoop() {
 	}
 }
 
-bool MissionComputer::DecodeWord() {
+bool FlightComputer::DecodeWord() {
 	int ones = 0;
 
 	for (int i = 0; i < 32; i++)
@@ -170,7 +170,7 @@ bool MissionComputer::DecodeWord() {
 	return true;
 }
 
-void MissionComputer::UpdateState() {
+void FlightComputer::UpdateState() {
 	if (word.ssm == SSM::NormalOperation) {
 		switch (word.label)
 		{
@@ -221,7 +221,7 @@ void MissionComputer::UpdateState() {
 }
 
 
-void MissionComputer::SendToDisplay() {
+void FlightComputer::SendToDisplay() {
 	int wordSent = sendto(sockARINC, reinterpret_cast<char*>(&aircraftState), sizeof(aircraftState), 0,
 		reinterpret_cast<sockaddr*>(&displayDestination),
 		sizeof(displayDestination));
@@ -231,7 +231,7 @@ void MissionComputer::SendToDisplay() {
 }
 
 
-void MissionComputer::Send1553Message(uint8_t rtAddress,
+void FlightComputer::Send1553Message(uint8_t rtAddress,
 									uint8_t subAddress,
 									const int16_t* dataWords,
 									uint8_t wordCount)
@@ -257,7 +257,7 @@ void MissionComputer::Send1553Message(uint8_t rtAddress,
 	}
 }
 
-void MissionComputer::SendToRT1() {
+void FlightComputer::SendToRT1() {
 	int16_t dataWords[]{
 	aircraftState.heading,
 	aircraftState.roll,
@@ -268,7 +268,7 @@ void MissionComputer::SendToRT1() {
 	Send1553Message(1, 0, dataWords, 5);
 }
 
-void MissionComputer::SendToRT2() {
+void FlightComputer::SendToRT2() {
 	int16_t dataWords[]{
 	aircraftState.latitude,
 	aircraftState.longitude,
@@ -278,7 +278,7 @@ void MissionComputer::SendToRT2() {
 	Send1553Message(2, 0, dataWords, 4);
 }
 
-void MissionComputer::SendToRT3() {
+void FlightComputer::SendToRT3() {
 	int16_t dataWords[]{
 	aircraftState.heading,
 	aircraftState.roll,
@@ -291,7 +291,7 @@ void MissionComputer::SendToRT3() {
 }
 
 
-void MissionComputer::SendToRT4() {
+void FlightComputer::SendToRT4() {
 	int16_t dataWords[]{
 	aircraftState.latitude,
 	aircraftState.longitude,
@@ -302,7 +302,7 @@ void MissionComputer::SendToRT4() {
 }
 
 
-DecodedStatus MissionComputer::ReceiveStatus() {
+DecodedStatus FlightComputer::ReceiveStatus() {
 	int busDestinationSize = sizeof(busDestination);
 	uint16_t StatusWord;
 	int StatusReceived = recvfrom(sock1553, reinterpret_cast<char*>(&StatusWord), sizeof(StatusWord), 0,
@@ -321,10 +321,10 @@ DecodedStatus MissionComputer::ReceiveStatus() {
 	return decodedstat; //void olsa da olurmuş
 }
 
-void MissionComputer::Run() {
+void FlightComputer::Run() {
 	isRunning = true;
 	timeBeginPeriod(1);
-	std::thread arincThread(&MissionComputer::ARINCReceiverLoop, this);
+	std::thread arincThread(&FlightComputer::ARINCReceiverLoop, this);
 
 	Bus1553Scheduler();
 

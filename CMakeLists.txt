@@ -28,8 +28,8 @@ add_executable(Display
 add_executable(GPS
     "ARINC429/GPS/main.cpp"  "ARINC429/GPS/GPS.cpp" )
 
-add_executable(MissionComputer
-    "MissionComputer/main.cpp"  "MissionComputer/MissionComputer.cpp")
+add_executable(FlightComputer
+    "FlightComputer/main.cpp"  "FlightComputer/FlightComputer.cpp")
 
 add_executable(ADC 
     "ARINC429/ADC/main.cpp"  "ARINC429/ADC/ADC.cpp")  
@@ -40,6 +40,9 @@ add_executable(IRS
 add_executable(Radio
     "ARINC429/Radio/main.cpp" "ARINC429/Radio/Radio.cpp")
 
+add_executable(Launcher 
+    "Launcher/main.cpp"  "Launcher/Launcher.cpp")
+
 
 target_include_directories(BusController PRIVATE Common)
 target_include_directories(RemoteTerminal PRIVATE Common)
@@ -47,10 +50,11 @@ target_include_directories(BUS PRIVATE Common)
 target_include_directories(BusMonitor PRIVATE Common)
 target_include_directories(GPS PRIVATE Common)
 target_include_directories(Display PRIVATE Common)
-target_include_directories(MissionComputer PRIVATE Common)
+target_include_directories(FlightComputer PRIVATE Common)
 target_include_directories(ADC PRIVATE Common)
 target_include_directories(IRS PRIVATE Common)
 target_include_directories(Radio PRIVATE Common)
+target_include_directories(Launcher PRIVATE Common)
 
 
 
@@ -60,9 +64,10 @@ target_link_libraries(BUS PRIVATE Common)
 target_link_libraries(BusMonitor PRIVATE Common)
 target_link_libraries(GPS PRIVATE Common)
 target_link_libraries(Display PRIVATE Common)
-target_link_libraries(MissionComputer PRIVATE Common)
+target_link_libraries(FlightComputer PRIVATE Common)
 target_link_libraries(ADC PRIVATE Common)
 target_link_libraries(IRS PRIVATE Common)
 target_link_libraries(Radio PRIVATE Common)
+target_link_libraries(Launcher PRIVATE Common)
 
 
