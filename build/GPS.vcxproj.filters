@@ -1,0 +1,19 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="18.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="C:\Users\tevfik.karakus\Desktop\VS\BUS\ARINC429\GPS\main.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\tevfik.karakus\Desktop\VS\BUS\ARINC429\GPS\GPS.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="C:\Users\tevfik.karakus\Desktop\VS\BUS\CMakeLists.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{BBC1A5F6-A65D-3B0B-870C-1FA7EC4D8186}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

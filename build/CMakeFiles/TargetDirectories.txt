@@ -1,0 +1,13 @@
+C:/Users/tevfik.karakus/Desktop/VS/BUS/build/CMakeFiles/Common.dir
+C:/Users/tevfik.karakus/Desktop/VS/BUS/build/CMakeFiles/RemoteTerminal.dir
+C:/Users/tevfik.karakus/Desktop/VS/BUS/build/CMakeFiles/BUS.dir
+C:/Users/tevfik.karakus/Desktop/VS/BUS/build/CMakeFiles/BusMonitor.dir
+C:/Users/tevfik.karakus/Desktop/VS/BUS/build/CMakeFiles/Display.dir
+C:/Users/tevfik.karakus/Desktop/VS/BUS/build/CMakeFiles/GPS.dir
+C:/Users/tevfik.karakus/Desktop/VS/BUS/build/CMakeFiles/FlightComputer.dir
+C:/Users/tevfik.karakus/Desktop/VS/BUS/build/CMakeFiles/ADC.dir
+C:/Users/tevfik.karakus/Desktop/VS/BUS/build/CMakeFiles/IRS.dir
+C:/Users/tevfik.karakus/Desktop/VS/BUS/build/CMakeFiles/Radio.dir
+C:/Users/tevfik.karakus/Desktop/VS/BUS/build/CMakeFiles/Launcher.dir
+C:/Users/tevfik.karakus/Desktop/VS/BUS/build/CMakeFiles/ALL_BUILD.dir
+C:/Users/tevfik.karakus/Desktop/VS/BUS/build/CMakeFiles/ZERO_CHECK.dir

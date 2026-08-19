@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Solution>
+	<Configurations>
+		<BuildType Name="Debug"/>
+		<BuildType Name="Release"/>
+		<BuildType Name="MinSizeRel"/>
+		<BuildType Name="RelWithDebInfo"/>
+		<Platform Name="x64"/>
+	</Configurations>
+	<Project Path="ADC.vcxproj" Type="8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942" Id="00890a62-60dc-38e4-9ff8-fdb734d2ab50">
+		<BuildDependency Project="Common.vcxproj"/>
+		<BuildDependency Project="ZERO_CHECK.vcxproj"/>
+	</Project>
+	<Project Path="ALL_BUILD.vcxproj" Type="8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942" Id="0b5d291f-c58a-3704-afcf-3eb0b02fd89a" DefaultStartup="true">
+		<BuildDependency Project="ADC.vcxproj"/>
+		<BuildDependency Project="BUS.vcxproj"/>
+		<BuildDependency Project="BusMonitor.vcxproj"/>
+		<BuildDependency Project="Common.vcxproj"/>
+		<BuildDependency Project="Display.vcxproj"/>
+		<BuildDependency Project="FlightComputer.vcxproj"/>
+		<BuildDependency Project="GPS.vcxproj"/>
+		<BuildDependency Project="IRS.vcxproj"/>
+		<BuildDependency Project="Launcher.vcxproj"/>
+		<BuildDependency Project="Radio.vcxproj"/>
+		<BuildDependency Project="RemoteTerminal.vcxproj"/>
+		<BuildDependency Project="ZERO_CHECK.vcxproj"/>
+		<Build Solution="Debug|*" Project="false"/>
+		<Build Solution="Release|*" Project="false"/>
+		<Build Solution="MinSizeRel|*" Project="false"/>
+		<Build Solution="RelWithDebInfo|*" Project="false"/>
+	</Project>
+	<Project Path="BUS.vcxproj" Type="8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942" Id="58ce45d9-963d-3011-9afd-49d6f8057d97">
+		<BuildDependency Project="Common.vcxproj"/>
+		<BuildDependency Project="ZERO_CHECK.vcxproj"/>
+	</Project>
+	<Project Path="BusMonitor.vcxproj" Type="8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942" Id="611d97e1-3ff3-3bea-8052-e7f46dae59e3">
+		<BuildDependency Project="Common.vcxproj"/>
+		<BuildDependency Project="ZERO_CHECK.vcxproj"/>
+	</Project>
+	<Project Path="Common.vcxproj" Type="8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942" Id="5b90af18-7610-35e9-b23f-05d7a8d74034">
+		<BuildDependency Project="ZERO_CHECK.vcxproj"/>
+	</Project>
+	<Project Path="Display.vcxproj" Type="8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942" Id="d8c9c69b-c8eb-3f50-b56b-9c5ff638418b">
+		<BuildDependency Project="Common.vcxproj"/>
+		<BuildDependency Project="ZERO_CHECK.vcxproj"/>
+	</Project>
+	<Project Path="FlightComputer.vcxproj" Type="8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942" Id="050d8330-3d86-347e-8b24-7d24cc52c0f9">
+		<BuildDependency Project="Common.vcxproj"/>
+		<BuildDependency Project="ZERO_CHECK.vcxproj"/>
+	</Project>
+	<Project Path="GPS.vcxproj" Type="8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942" Id="82d29f5b-8829-3de2-a1ec-7affc4c3f0f5">
+		<BuildDependency Project="Common.vcxproj"/>
+		<BuildDependency Project="ZERO_CHECK.vcxproj"/>
+	</Project>
+	<Project Path="IRS.vcxproj" Type="8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942" Id="e3a3c38a-8639-3acb-bb05-268a329e055f">
+		<BuildDependency Project="Common.vcxproj"/>
+		<BuildDependency Project="ZERO_CHECK.vcxproj"/>
+	</Project>
+	<Project Path="Launcher.vcxproj" Type="8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942" Id="0dfd0200-ade3-30c7-82c9-f0adf09d2b29">
+		<BuildDependency Project="Common.vcxproj"/>
+		<BuildDependency Project="ZERO_CHECK.vcxproj"/>
+	</Project>
+	<Project Path="Radio.vcxproj" Type="8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942" Id="2b978fea-7c35-3ccd-857e-27fa4685af59">
+		<BuildDependency Project="Common.vcxproj"/>
+		<BuildDependency Project="ZERO_CHECK.vcxproj"/>
+	</Project>
+	<Project Path="RemoteTerminal.vcxproj" Type="8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942" Id="3f04349c-521b-3420-90bd-61762e3b0fe3">
+		<BuildDependency Project="Common.vcxproj"/>
+		<BuildDependency Project="ZERO_CHECK.vcxproj"/>
+	</Project>
+	<Project Path="ZERO_CHECK.vcxproj" Type="8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942" Id="dac3b562-35f3-3935-85c7-05d4cbe92dd0"/>
+</Solution>
