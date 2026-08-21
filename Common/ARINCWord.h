@@ -43,3 +43,4 @@ void Delay(int milliseconds);
 uint32_t CreateARINCWord(ARINCWord& word);
 ARINCWord DecodeARINCWord(uint32_t rawWord);
 bool CalculateOddParity(uint32_t raw);
+bool CheckParity(uint32_t raw);

@@ -82,7 +82,8 @@ FetchContent_MakeAvailable(googletest)
 enable_testing()
 
 add_executable(FlightComputerTests
-    Tests/CommandWordTest.cpp
+    "Tests/MIL-STD-1553_Test.cpp"
+    "Tests/ARINC429_Test.cpp"
 )
 
 target_include_directories(FlightComputerTests PRIVATE
